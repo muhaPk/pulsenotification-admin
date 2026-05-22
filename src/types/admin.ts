@@ -1,0 +1,151 @@
+// Pagination interface
+export interface Pagination {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+// Admin User interface
+export interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'user';
+  image?: string | null;
+  bitcoinBalance: string;
+  bitcoinBalanceBTC: number;
+  withdrawalAddress?: string | null;
+  emailVerified?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Address interface
+export interface Address {
+  id: string;
+  user_id: string;
+  address: string;
+  status: boolean;
+  createdAt: string;
+  updatedAt: string;
+  transactions?: BitcoinTransaction[];
+}
+
+// Bitcoin Transaction interface
+export interface BitcoinTransaction {
+  id: string;
+  addressId: string;
+  txHash: string;
+  amount: string;
+  amountBTC: number;
+  confirmations: number;
+  blockHeight?: number;
+  timestamp: string;
+  type: 'received' | 'sent';
+  status: 'pending' | 'confirmed' | 'failed';
+  createdAt: string;
+  updatedAt: string;
+  address?: {
+    id: string;
+    address: string;
+    user_id: string;
+  };
+}
+
+// Transaction Log interface
+export interface TransactionLog {
+  id: string;
+  userId: string;
+  type: 'WITHDRAWAL' | 'DEPOSIT' | 'INVESTMENT';
+  amount: string;
+  amountBTC: number;
+  status: 'PENDING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  address?: string;
+  txHash?: string;
+  description?: string;
+  metadata?: any;
+  createdAt: string;
+  updatedAt: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+}
+
+// Dashboard Stats interface
+export interface DashboardStats {
+  users: {
+    total: number;
+  };
+  addresses: {
+    total: number;
+    active: number;
+    inactive: number;
+  };
+  bitcoinTransactions: {
+    total: number;
+    confirmed: number;
+    pending: number;
+  };
+  transactionLogs: {
+    deposits: number;
+    withdrawals: number;
+    investments: number;
+  };
+  totalBitcoinBalance: {
+    satoshis: string;
+    btc: number;
+  };
+}
+
+// API Response interfaces
+export interface AdminUsersResponse {
+  success: boolean;
+  data: AdminUser[];
+  pagination: Pagination;
+}
+
+export interface AdminUserResponse {
+  success: boolean;
+  data: AdminUser;
+}
+
+export interface AdminAddressesResponse {
+  success: boolean;
+  data: Address[];
+  pagination: Pagination;
+}
+
+export interface AdminAddressResponse {
+  success: boolean;
+  data: Address;
+}
+
+export interface AdminBitcoinTransactionsResponse {
+  success: boolean;
+  data: BitcoinTransaction[];
+  pagination: Pagination;
+}
+
+export interface AdminBitcoinTransactionResponse {
+  success: boolean;
+  data: BitcoinTransaction;
+}
+
+export interface AdminTransactionLogsResponse {
+  success: boolean;
+  data: TransactionLog[];
+  pagination: Pagination;
+}
+
+export interface AdminTransactionLogResponse {
+  success: boolean;
+  data: TransactionLog;
+}
+
+export interface AdminDashboardStatsResponse {
+  success: boolean;
+  data: DashboardStats;
+}
