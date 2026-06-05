@@ -19,9 +19,11 @@ import { ScrollToTop } from "./components/common/ScrollToTop";
 import Home from "./pages/Dashboard/Home";
 import { ProtectedRoute, AuthRoute } from "./components/auth/ProtectedRoute";
 import AdminUsers from "./pages/Admin/Users";
-import AdminAddresses from "./pages/Admin/Addresses";
-import AdminBitcoinTransactions from "./pages/Admin/BitcoinTransactions";
-import AdminTransactionLogs from "./pages/Admin/TransactionLogs";
+import AdminPairs from "./pages/Admin/Pairs";
+import AdminSettings from "./pages/Admin/Settings";
+import AdminMonitor from "./pages/Admin/Monitor";
+import AdminAlerts from "./pages/Admin/Alerts";
+import AdminPerformance from "./pages/Admin/Performance";
 
 export default function App() {
   return (
@@ -57,9 +59,11 @@ export default function App() {
 
             {/* Admin Routes */}
             <Route path="/admin/users" element={<AdminUsers />} />
-            <Route path="/admin/addresses" element={<AdminAddresses />} />
-            <Route path="/admin/bitcoin-transactions" element={<AdminBitcoinTransactions />} />
-            <Route path="/admin/transaction-logs" element={<AdminTransactionLogs />} />
+            <Route path="/admin/pairs" element={<AdminPairs />} />
+            <Route path="/admin/settings" element={<AdminSettings />} />
+            <Route path="/admin/monitor" element={<AdminMonitor />} />
+            <Route path="/admin/alerts" element={<AdminAlerts />} />
+            <Route path="/admin/performance" element={<AdminPerformance />} />
           </Route>
 
           {/* Auth Routes - Redirect to dashboard if already authenticated */}

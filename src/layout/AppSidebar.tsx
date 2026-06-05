@@ -14,12 +14,16 @@ const sidebarSections = [
     title: "Tables",
     items: [
       { name: "Users", path: "/admin/users" },
+      { name: "Pairs", path: "/admin/pairs" },
+      { name: "Alerts", path: "/admin/alerts" },
     ],
   },
   {
     title: "Pages",
     items: [
-      { name: "Blank Page", path: "/blank" },
+      { name: "Settings", path: "/admin/settings" },
+      { name: "Monitor", path: "/admin/monitor" },
+      { name: "Performance", path: "/admin/performance" },
     ],
   },
 ];

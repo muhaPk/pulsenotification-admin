@@ -115,7 +115,7 @@ export default function BasicTableOne() {
       <div className="max-w-full overflow-x-auto">
         <Table>
           {/* Table Header */}
-          <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+          <TableHeader className="bg-gray-50 dark:border-white/[0.05] dark:bg-gray-900">
             <TableRow>
               <TableCell
                 isHeader

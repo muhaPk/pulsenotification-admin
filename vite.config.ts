@@ -4,6 +4,9 @@ import svgr from "vite-plugin-svgr";
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    allowedHosts: ["admin.pulsenotification.com"],
+  },
   plugins: [
     react(),
     svgr({
