@@ -8,8 +8,10 @@ import {
 } from "../../ui/table";
 import Badge from "../../ui/badge/Badge";
 import { useGenericGetWeb } from "../../../hooks/useGenericGetWeb";
-import { AdminAlertsResponse } from "../../../types/admin";
-import { API_ADMIN_ALERTS } from "../../../config/endpoints";
+import useGenericSet from "../../../hooks/useGenericSetWeb";
+import { AdminAlertsResponse, AdminAlertsSparklinesResponse } from "../../../types/admin";
+import { API_ADMIN_ALERTS, API_ADMIN_ALERT_BY_ID, API_ADMIN_ALERTS_SPARKLINES } from "../../../config/endpoints";
+import { sparklineUp, sparklineDown, sparklineMuted } from "../../../config/colors";
 
 export default function AlertsTable() {
   const [page, setPage] = useState(1);
@@ -18,6 +20,7 @@ export default function AlertsTable() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const { data, loading, error, loadData } = useGenericGetWeb();
+  const { data: sparklinesData, loadData: loadSparklines } = useGenericGetWeb();
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -36,9 +39,14 @@ export default function AlertsTable() {
     });
   }, [page, debouncedSearch]);
 
+  const fetchSparklines = useCallback(() => {
+    loadSparklines({ api: API_ADMIN_ALERTS_SPARKLINES });
+  }, []);
+
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    fetchSparklines();
+  }, [fetchData, fetchSparklines]);
 
   const refetch = () => {
     loadData({
@@ -46,11 +54,24 @@ export default function AlertsTable() {
       params: { page, limit, ...(search && { search }) },
       isRefreshing: true,
     });
+    loadSparklines({ api: API_ADMIN_ALERTS_SPARKLINES, isRefreshing: true });
+  };
+
+  const { uploadData } = useGenericSet();
+
+  const handleDelete = (alertId: string) => {
+    if (!window.confirm('Are you sure you want to delete this alert?')) return;
+    uploadData({
+      api: API_ADMIN_ALERT_BY_ID(alertId),
+      method: 'delete',
+      dataCallback: () => refetch(),
+    });
   };
 
   const response = data as AdminAlertsResponse | null;
   const alerts = response?.data ?? [];
   const pagination = response?.pagination;
+  const sparklinesMap = (sparklinesData as AdminAlertsSparklinesResponse | null)?.data ?? {};
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -60,6 +81,61 @@ export default function AlertsTable() {
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  const AlertSparkline = ({
+    closes, times, highlight, createdAt, width = 80, height = 32,
+  }: {
+    closes: number[]; times: number[]; highlight?: 'up' | 'down'; createdAt?: string; width?: number; height?: number;
+  }) => {
+    if (!closes || closes.length < 2 || !times || times.length < 2) return <span className="text-gray-400">—</span>;
+
+    const min = Math.min(...closes);
+    const max = Math.max(...closes);
+    const range = max - min || 1;
+    const pad = range * 0.1;
+    const adjMin = min - pad;
+    const adjRange = (max + pad) - adjMin;
+    const stepX = width / (closes.length - 1);
+
+    const fullPath = closes.map((c, i) => {
+      const x = i * stepX;
+      const y = height - ((c - adjMin) / adjRange) * height;
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+
+    let segPath = '';
+    if (highlight && createdAt && times.length >= 2) {
+      const targetTime = new Date(createdAt).getTime();
+      const halfInterval = (times[1] - times[0]) / 2;
+      let closestIdx = 0;
+      let closestDiff = Infinity;
+      for (let i = 0; i < times.length; i++) {
+        const candleMid = times[i] + halfInterval;
+        const diff = Math.abs(candleMid - targetTime);
+        if (diff < closestDiff) { closestDiff = diff; closestIdx = i; }
+      }
+      const segEnd = Math.min(closestIdx + 1, closes.length - 1);
+      const segStart = segEnd === closestIdx ? Math.max(0, closestIdx - 1) : closestIdx;
+      const segPoints = [];
+      for (let i = segStart; i <= segEnd; i++) {
+        const x = i * stepX;
+        const y = height - ((closes[i] - adjMin) / adjRange) * height;
+        segPoints.push(`${i === segStart ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`);
+      }
+      segPath = segPoints.join(' ');
+    }
+
+    const hasHighlight = !!highlight && !!segPath;
+    const baseColor = closes[closes.length - 1] >= closes[0] ? sparklineUp : sparklineDown;
+    const hlColor = highlight === 'up' ? sparklineUp : sparklineDown;
+
+    return (
+      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="inline-block align-middle">
+        <path d={fullPath} stroke={hasHighlight ? sparklineMuted : baseColor} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        {segPath && <path d={segPath} stroke={hlColor} strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />}
+      </svg>
+    );
   };
 
   if (loading && !data) {
@@ -126,7 +202,13 @@ export default function AlertsTable() {
                   User
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                  Sparkline
+                </TableCell>
+                <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                   Created At
+                </TableCell>
+                <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                  Actions
                 </TableCell>
               </TableRow>
             </TableHeader>
@@ -178,8 +260,24 @@ export default function AlertsTable() {
                       </span>
                     </div>
                   </TableCell>
+                  <TableCell className="px-4 py-3 text-start">
+                    <AlertSparkline
+                      closes={sparklinesMap[alert.id]?.closes ?? []}
+                      times={sparklinesMap[alert.id]?.times ?? []}
+                      highlight={alert.direction === 'PUMP' ? 'up' : 'down'}
+                      createdAt={alert.createdAt}
+                    />
+                  </TableCell>
                   <TableCell className="px-4 py-3 text-gray-500 text-theme-sm dark:text-gray-400">
                     {formatDate(alert.createdAt)}
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <button
+                      onClick={() => handleDelete(alert.id)}
+                      className="px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 dark:text-red-400 dark:bg-red-900/20 dark:hover:bg-red-900/40"
+                    >
+                      Delete
+                    </button>
                   </TableCell>
                 </TableRow>
               ))}

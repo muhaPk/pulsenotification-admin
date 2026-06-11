@@ -190,6 +190,21 @@ export interface AdminPairsAlertsCountResponse {
   data: PairAlertCount[];
 }
 
+export interface AdminPairsSparklinesResponse {
+  success: boolean;
+  data: Record<string, number[]>;
+}
+
+export interface AlertSparklineData {
+  closes: number[];
+  times: number[];
+}
+
+export interface AdminAlertsSparklinesResponse {
+  success: boolean;
+  data: Record<string, AlertSparklineData>;
+}
+
 // Admin Alert interface
 export interface AdminAlert {
   id: string;

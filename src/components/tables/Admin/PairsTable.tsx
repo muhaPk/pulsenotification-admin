@@ -12,12 +12,15 @@ import {
   AdminPairsResponse,
   AdminPairsVolatilityResponse,
   AdminPairsAlertsCountResponse,
+  AdminPairsSparklinesResponse,
 } from "../../../types/admin";
 import {
   API_ADMIN_PAIRS,
   API_ADMIN_PAIRS_VOLATILITY,
   API_ADMIN_PAIRS_ALERTS_COUNT,
+  API_ADMIN_PAIRS_SPARKLINES,
 } from "../../../config/endpoints";
+import { sparklineUp, sparklineDown } from "../../../config/colors";
 
 export default function PairsTable() {
   const [page, setPage] = useState(1);
@@ -28,6 +31,7 @@ export default function PairsTable() {
   const { data, loading, error, loadData } = useGenericGetWeb();
   const { data: volData, loadData: loadVol } = useGenericGetWeb();
   const { data: alertsData, loadData: loadAlerts } = useGenericGetWeb();
+  const { data: sparklinesData, loadData: loadSparklines } = useGenericGetWeb();
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -54,11 +58,16 @@ export default function PairsTable() {
     loadAlerts({ api: API_ADMIN_PAIRS_ALERTS_COUNT });
   }, []);
 
+  const fetchSparklines = useCallback(() => {
+    loadSparklines({ api: API_ADMIN_PAIRS_SPARKLINES });
+  }, []);
+
   useEffect(() => {
     fetchData();
     fetchVolatility();
     fetchAlertsCount();
-  }, [fetchData, fetchVolatility, fetchAlertsCount]);
+    fetchSparklines();
+  }, [fetchData, fetchVolatility, fetchAlertsCount, fetchSparklines]);
 
   const refetch = () => {
     loadData({
@@ -68,6 +77,7 @@ export default function PairsTable() {
     });
     loadVol({ api: API_ADMIN_PAIRS_VOLATILITY, isRefreshing: true });
     loadAlerts({ api: API_ADMIN_PAIRS_ALERTS_COUNT, isRefreshing: true });
+    loadSparklines({ api: API_ADMIN_PAIRS_SPARKLINES, isRefreshing: true });
   };
 
   const response = data as AdminPairsResponse | null;
@@ -79,6 +89,7 @@ export default function PairsTable() {
   const alertsCountMap = new Map(
     (alertsData as AdminPairsAlertsCountResponse | null)?.data?.map((a) => [a.pairId, a.count]) ?? [],
   );
+  const sparklinesMap = (sparklinesData as AdminPairsSparklinesResponse | null)?.data ?? {};
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -86,6 +97,28 @@ export default function PairsTable() {
       month: 'short',
       day: 'numeric',
     });
+  };
+
+  const SparklineChart = ({ closes, width = 80, height = 28 }: { closes: number[]; width?: number; height?: number }) => {
+    if (!closes || closes.length < 2) return <span className="text-gray-400">—</span>;
+    const min = Math.min(...closes);
+    const max = Math.max(...closes);
+    const range = max - min || 1;
+    const pad = range * 0.1;
+    const adjMin = min - pad;
+    const adjRange = (max + pad) - adjMin;
+    const stepX = width / (closes.length - 1);
+    const color = closes[closes.length - 1] >= closes[0] ? sparklineUp : sparklineDown;
+    const points = closes.map((c, i) => {
+      const x = i * stepX;
+      const y = height - ((c - adjMin) / adjRange) * height;
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    return (
+      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="inline-block align-middle">
+        <path d={points} stroke={color} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
   };
 
   if (loading && !data) {
@@ -142,6 +175,9 @@ export default function PairsTable() {
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                   Created At
                 </TableCell>
+                <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                  Sparkline
+                </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-end text-theme-xs dark:text-gray-400">
                   Avg Volatility 1m
                 </TableCell>
@@ -182,6 +218,9 @@ export default function PairsTable() {
                   </TableCell>
                   <TableCell className="px-4 py-3 text-gray-500 text-theme-sm dark:text-gray-400">
                     {formatDate(pair.createdAt)}
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-start">
+                    <SparklineChart closes={sparklinesMap[pair.id] ?? []} />
                   </TableCell>
                   <TableCell className="px-4 py-3 text-end text-theme-sm">
                     {volatilityMap.has(pair.id) ? (
