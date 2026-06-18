@@ -79,22 +79,6 @@ export default function UsersTable() {
     return Date.now() - new Date(dateStr).getTime() < 120000;
   };
 
-  if (loading && !data) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-gray-500">Loading users...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-4 text-red-600 bg-red-50 rounded-lg dark:bg-red-900/20">
-        Error: {error}
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
       {/* Search and Controls */}
@@ -114,7 +98,15 @@ export default function UsersTable() {
         </button>
       </div>
 
-      {/* Table */}
+      {error ? (
+        <div className="p-4 text-red-600 bg-red-50 rounded-lg dark:bg-red-900/20">
+          Error: {error}
+        </div>
+      ) : loading && !data ? (
+        <div className="flex items-center justify-center p-8">
+          <div className="text-gray-500">Loading users...</div>
+        </div>
+      ) : (
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
         <div className="max-w-full overflow-x-auto">
           <Table>
@@ -179,6 +171,7 @@ export default function UsersTable() {
           </Table>
         </div>
       </div>
+      )}
 
       {/* Pagination */}
       {pagination && (

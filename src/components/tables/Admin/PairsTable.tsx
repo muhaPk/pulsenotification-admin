@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -9,6 +9,7 @@ import {
 import Badge from "../../ui/badge/Badge";
 import { useGenericGetWeb } from "../../../hooks/useGenericGetWeb";
 import {
+  AdminPair,
   AdminPairsResponse,
   AdminPairsVolatilityResponse,
   AdminPairsAlertsCountResponse,
@@ -22,74 +23,167 @@ import {
 } from "../../../config/endpoints";
 import { sparklineUp, sparklineDown } from "../../../config/colors";
 
+type SortColumn = 'pair' | 'exchange' | 'type' | 'createdBy' | 'createdAt' | 'volatility1m' | 'change7d' | 'alerts';
+
+const PAGE_SIZE = 50;
+
 export default function PairsTable() {
-  const [page, setPage] = useState(1);
-  const [limit] = useState(10);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [searchKey, setSearchKey] = useState(0);
+  const [sortColumn, setSortColumn] = useState<SortColumn>('createdAt');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [allPairs, setAllPairs] = useState<AdminPair[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const SortIcon = ({ column }: { column: SortColumn }) => {
+    if (sortColumn !== column) return <span className="ml-1 text-gray-300">↕</span>;
+    return <span className="ml-1 text-blue-500">{sortDirection === 'asc' ? '↑' : '↓'}</span>;
+  };
   const { data, loading, error, loadData } = useGenericGetWeb();
   const { data: volData, loadData: loadVol } = useGenericGetWeb();
   const { data: alertsData, loadData: loadAlerts } = useGenericGetWeb();
   const { data: sparklinesData, loadData: loadSparklines } = useGenericGetWeb();
 
+  const debouncedSearchRef = useRef(debouncedSearch);
+  debouncedSearchRef.current = debouncedSearch;
+  const loadDataRef = useRef(loadData);
+  loadDataRef.current = loadData;
+  const loadVolRef = useRef(loadVol);
+  loadVolRef.current = loadVol;
+  const loadAlertsRef = useRef(loadAlerts);
+  loadAlertsRef.current = loadAlerts;
+  const loadSparklinesRef = useRef(loadSparklines);
+  loadSparklinesRef.current = loadSparklines;
+
+  const fetchPageRef = useRef((pageNum: number, append: boolean) => {});
+  fetchPageRef.current = (pageNum: number, append: boolean) => {
+    setLoadingMore(true);
+    loadDataRef.current({
+      api: API_ADMIN_PAIRS,
+      params: { page: pageNum, limit: PAGE_SIZE, ...(debouncedSearchRef.current && { search: debouncedSearchRef.current }) },
+      isRefreshing: true,
+      dataCallback: (res: AdminPairsResponse) => {
+        setAllPairs(prev => append ? [...prev, ...(res.data ?? [])] : (res.data ?? []));
+        setHasMore(res.pagination ? res.pagination.page < res.pagination.totalPages : false);
+        setLoadingMore(false);
+      },
+    });
+  };
+
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       setDebouncedSearch(search);
+      setAllPairs([]);
       setPage(1);
+      setHasMore(true);
+      setLoadingMore(false);
+      setSearchKey(k => k + 1);
     }, 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [search]);
 
-  const fetchData = useCallback(() => {
-    loadData({
-      api: API_ADMIN_PAIRS,
-      isRefreshing: true,
-      params: { page, limit, ...(debouncedSearch && { search: debouncedSearch }) },
-    });
-  }, [page, debouncedSearch]);
-
-  const fetchVolatility = useCallback(() => {
-    loadVol({ api: API_ADMIN_PAIRS_VOLATILITY });
-  }, []);
-
-  const fetchAlertsCount = useCallback(() => {
-    loadAlerts({ api: API_ADMIN_PAIRS_ALERTS_COUNT });
-  }, []);
-
-  const fetchSparklines = useCallback(() => {
-    loadSparklines({ api: API_ADMIN_PAIRS_SPARKLINES });
+  useEffect(() => {
+    fetchPageRef.current(1, false);
+    loadVolRef.current({ api: API_ADMIN_PAIRS_VOLATILITY });
+    loadAlertsRef.current({ api: API_ADMIN_PAIRS_ALERTS_COUNT });
+    loadSparklinesRef.current({ api: API_ADMIN_PAIRS_SPARKLINES, params: { interval: '4h', limit: 42 } });
   }, []);
 
   useEffect(() => {
-    fetchData();
-    fetchVolatility();
-    fetchAlertsCount();
-    fetchSparklines();
-  }, [fetchData, fetchVolatility, fetchAlertsCount, fetchSparklines]);
+    if (searchKey > 0) {
+      fetchPageRef.current(1, false);
+    }
+  }, [searchKey]);
+
+  useEffect(() => {
+    if (page > 1) {
+      fetchPageRef.current(page, true);
+    }
+  }, [page]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          setPage(p => p + 1);
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore]);
 
   const refetch = () => {
-    loadData({
-      api: API_ADMIN_PAIRS,
-      params: { page, limit, ...(search && { search }) },
-      isRefreshing: true,
-    });
-    loadVol({ api: API_ADMIN_PAIRS_VOLATILITY, isRefreshing: true });
-    loadAlerts({ api: API_ADMIN_PAIRS_ALERTS_COUNT, isRefreshing: true });
-    loadSparklines({ api: API_ADMIN_PAIRS_SPARKLINES, isRefreshing: true });
+    setAllPairs([]);
+    setPage(1);
+    setHasMore(true);
+    setLoadingMore(false);
+    fetchPageRef.current(1, false);
+    loadVolRef.current({ api: API_ADMIN_PAIRS_VOLATILITY, isRefreshing: true });
+    loadAlertsRef.current({ api: API_ADMIN_PAIRS_ALERTS_COUNT, isRefreshing: true });
+    loadSparklinesRef.current({ api: API_ADMIN_PAIRS_SPARKLINES, params: { interval: '4h', limit: 42, refresh: true }, isRefreshing: true });
   };
-
-  const response = data as AdminPairsResponse | null;
-  const pairs = response?.data ?? [];
-  const pagination = response?.pagination;
+  const pairs = allPairs;
   const volatilityMap = new Map(
     (volData as AdminPairsVolatilityResponse | null)?.data?.map((v) => [v.id, v.avgVolatility1m]) ?? [],
+  );
+  const change7dMap = new Map(
+    (volData as AdminPairsVolatilityResponse | null)?.data?.map((v) => [v.id, v.change7d]) ?? [],
   );
   const alertsCountMap = new Map(
     (alertsData as AdminPairsAlertsCountResponse | null)?.data?.map((a) => [a.pairId, a.count]) ?? [],
   );
   const sparklinesMap = (sparklinesData as AdminPairsSparklinesResponse | null)?.data ?? {};
+
+  const sortedPairs = [...pairs].sort((a, b) => {
+    const dir = sortDirection === 'asc' ? 1 : -1;
+    let cmp = 0;
+    switch (sortColumn) {
+      case 'pair':
+        cmp = `${a.base}/${a.target}`.localeCompare(`${b.base}/${b.target}`);
+        break;
+      case 'exchange':
+        cmp = a.exchange.localeCompare(b.exchange);
+        break;
+      case 'type':
+        cmp = a.type.localeCompare(b.type);
+        break;
+      case 'createdBy':
+        cmp = a.user.name.localeCompare(b.user.name);
+        break;
+      case 'createdAt':
+        cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        break;
+      case 'volatility1m':
+        cmp = (volatilityMap.get(a.id) ?? 0) - (volatilityMap.get(b.id) ?? 0);
+        break;
+      case 'change7d':
+        cmp = (change7dMap.get(a.id) ?? 0) - (change7dMap.get(b.id) ?? 0);
+        break;
+      case 'alerts':
+        cmp = (alertsCountMap.get(a.id) ?? 0) - (alertsCountMap.get(b.id) ?? 0);
+        break;
+    }
+    return cmp * dir;
+  });
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -99,7 +193,7 @@ export default function PairsTable() {
     });
   };
 
-  const SparklineChart = ({ closes, width = 80, height = 28 }: { closes: number[]; width?: number; height?: number }) => {
+  const SparklineChart = ({ closes, change7d, width = 80, height = 28 }: { closes: number[]; change7d?: number | null; width?: number; height?: number }) => {
     if (!closes || closes.length < 2) return <span className="text-gray-400">—</span>;
     const min = Math.min(...closes);
     const max = Math.max(...closes);
@@ -108,7 +202,9 @@ export default function PairsTable() {
     const adjMin = min - pad;
     const adjRange = (max + pad) - adjMin;
     const stepX = width / (closes.length - 1);
-    const color = closes[closes.length - 1] >= closes[0] ? sparklineUp : sparklineDown;
+    const color = change7d !== undefined && change7d !== null
+      ? (change7d >= 0 ? sparklineUp : sparklineDown)
+      : (closes[closes.length - 1] >= closes[0] ? sparklineUp : sparklineDown);
     const points = closes.map((c, i) => {
       const x = i * stepX;
       const y = height - ((c - adjMin) / adjRange) * height;
@@ -120,22 +216,6 @@ export default function PairsTable() {
       </svg>
     );
   };
-
-  if (loading && !data) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-gray-500">Loading pairs...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-4 text-red-600 bg-red-50 rounded-lg dark:bg-red-900/20">
-        Error: {error}
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4">
@@ -155,45 +235,82 @@ export default function PairsTable() {
         </button>
       </div>
 
+      {error ? (
+        <div className="p-4 text-red-600 bg-red-50 rounded-lg dark:bg-red-900/20">
+          Error: {error}
+        </div>
+      ) : allPairs.length === 0 ? (
+        <div className="flex items-center justify-center p-8">
+          <div className="text-gray-500">Loading pairs...</div>
+        </div>
+      ) : (
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
         <div className="max-w-full overflow-x-auto">
           <Table>
             <TableHeader className="bg-gray-50 dark:border-white/[0.05] dark:bg-gray-900">
               <TableRow>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                  Pair
+                  <button onClick={() => handleSort('pair')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200">
+                    Pair<SortIcon column="pair" />
+                  </button>
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                  Exchange
+                  <button onClick={() => handleSort('exchange')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200">
+                    Exchange<SortIcon column="exchange" />
+                  </button>
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                  Type
+                  <button onClick={() => handleSort('type')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200">
+                    Type<SortIcon column="type" />
+                  </button>
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                  Created By
+                  <button onClick={() => handleSort('createdBy')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200">
+                    Created By<SortIcon column="createdBy" />
+                  </button>
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                  Created At
+                  <button onClick={() => handleSort('createdAt')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200">
+                    Created At<SortIcon column="createdAt" />
+                  </button>
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                   Sparkline
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-end text-theme-xs dark:text-gray-400">
-                  Avg Volatility 1m
+                  <button onClick={() => handleSort('volatility1m')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200 ml-auto">
+                    Avg Volatility 1m<SortIcon column="volatility1m" />
+                  </button>
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-end text-theme-xs dark:text-gray-400">
-                  Alerts
+                  <button onClick={() => handleSort('change7d')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200 ml-auto">
+                    7d Change<SortIcon column="change7d" />
+                  </button>
+                </TableCell>
+                <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-end text-theme-xs dark:text-gray-400">
+                  <button onClick={() => handleSort('alerts')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200 ml-auto">
+                    Alerts<SortIcon column="alerts" />
+                  </button>
                 </TableCell>
               </TableRow>
             </TableHeader>
 
             <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-              {pairs.map((pair) => (
+              {sortedPairs.map((pair) => (
                 <TableRow key={pair.id}>
                   <TableCell className="px-5 py-4 sm:px-6 text-start">
-                    <span className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                    <a
+                      href={
+                        pair.type === 'futures'
+                          ? `https://www.binance.com/en/futures/${pair.base}${pair.target}`
+                          : `https://www.binance.com/en/trade/${pair.base}_${pair.target}`
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline"
+                    >
                       {pair.base}/{pair.target}
-                    </span>
+                    </a>
                   </TableCell>
                   <TableCell className="px-4 py-3 text-gray-500 text-theme-sm dark:text-gray-400">
                     {pair.exchange}
@@ -220,12 +337,25 @@ export default function PairsTable() {
                     {formatDate(pair.createdAt)}
                   </TableCell>
                   <TableCell className="px-4 py-3 text-start">
-                    <SparklineChart closes={sparklinesMap[pair.id] ?? []} />
+                    <SparklineChart closes={sparklinesMap[pair.id] ?? []} change7d={change7dMap.get(pair.id)} />
                   </TableCell>
                   <TableCell className="px-4 py-3 text-end text-theme-sm">
                     {volatilityMap.has(pair.id) ? (
                       <span className={volatilityMap.get(pair.id)! > 1 ? 'text-red-500 font-medium' : 'text-gray-500 dark:text-gray-400'}>
                         {volatilityMap.get(pair.id)!.toFixed(4)}%
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-end text-theme-sm">
+                    {change7dMap.has(pair.id) && change7dMap.get(pair.id) !== null ? (
+                      <span className={`font-medium ${
+                        (change7dMap.get(pair.id) ?? 0) >= 0
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400'
+                      }`}>
+                        {(change7dMap.get(pair.id) ?? 0) >= 0 ? '+' : ''}{change7dMap.get(pair.id)!.toFixed(2)}%
                       </span>
                     ) : (
                       <span className="text-gray-400">—</span>
@@ -246,33 +376,16 @@ export default function PairsTable() {
           </Table>
         </div>
       </div>
-
-      {pagination && (
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="text-sm text-gray-500">
-            Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, pagination.total)} of {pagination.total} pairs
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-white hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
-            >
-              Previous
-            </button>
-            <span className="px-4 py-2 text-sm text-gray-500">
-              Page {page} of {pagination.totalPages}
-            </span>
-            <button
-              onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
-              disabled={page === pagination.totalPages}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-white hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
-            >
-              Next
-            </button>
-          </div>
-        </div>
       )}
+
+      <div ref={sentinelRef} className="px-4 py-4">
+        {loadingMore && (
+          <div className="text-sm text-gray-500 text-center">Loading more pairs...</div>
+        )}
+        {!hasMore && allPairs.length > 0 && (
+          <div className="text-sm text-gray-500 text-center">All {allPairs.length} pairs loaded</div>
+        )}
+      </div>
     </div>
   );
 }

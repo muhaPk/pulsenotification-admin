@@ -173,6 +173,7 @@ export interface AdminPairsResponse {
 export interface PairVolatility {
   id: string;
   avgVolatility1m: number | null;
+  change7d: number | null;
 }
 
 export interface AdminPairsVolatilityResponse {

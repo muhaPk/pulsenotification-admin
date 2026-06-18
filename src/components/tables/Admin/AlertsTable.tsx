@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -9,55 +9,119 @@ import {
 import Badge from "../../ui/badge/Badge";
 import { useGenericGetWeb } from "../../../hooks/useGenericGetWeb";
 import useGenericSet from "../../../hooks/useGenericSetWeb";
-import { AdminAlertsResponse, AdminAlertsSparklinesResponse } from "../../../types/admin";
+import { AdminAlert, AdminAlertsResponse, AdminAlertsSparklinesResponse } from "../../../types/admin";
 import { API_ADMIN_ALERTS, API_ADMIN_ALERT_BY_ID, API_ADMIN_ALERTS_SPARKLINES } from "../../../config/endpoints";
 import { sparklineUp, sparklineDown, sparklineMuted } from "../../../config/colors";
 
+const PAGE_SIZE = 50;
+
+type SortColumn = 'direction' | 'pair' | 'exchange' | 'change' | 'multiplier' | 'volatility' | 'price' | 'user' | 'createdAt';
+
 export default function AlertsTable() {
-  const [page, setPage] = useState(1);
-  const [limit] = useState(10);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [searchKey, setSearchKey] = useState(0);
+  const [allAlerts, setAllAlerts] = useState<AdminAlert[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [sortColumn, setSortColumn] = useState<SortColumn>('createdAt');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const { data, loading, error, loadData } = useGenericGetWeb();
   const { data: sparklinesData, loadData: loadSparklines } = useGenericGetWeb();
+  const { uploadData } = useGenericSet();
+
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const SortIcon = ({ column }: { column: SortColumn }) => {
+    if (sortColumn !== column) return <span className="ml-1 text-gray-300">↕</span>;
+    return <span className="ml-1 text-blue-500">{sortDirection === 'asc' ? '↑' : '↓'}</span>;
+  };
+
+  const debouncedSearchRef = useRef(debouncedSearch);
+  debouncedSearchRef.current = debouncedSearch;
+  const loadDataRef = useRef(loadData);
+  loadDataRef.current = loadData;
+  const loadSparklinesRef = useRef(loadSparklines);
+  loadSparklinesRef.current = loadSparklines;
+
+  const fetchPageRef = useRef((pageNum: number, append: boolean) => {});
+  fetchPageRef.current = (pageNum: number, append: boolean) => {
+    setLoadingMore(true);
+    loadDataRef.current({
+      api: API_ADMIN_ALERTS,
+      params: { page: pageNum, limit: PAGE_SIZE, ...(debouncedSearchRef.current && { search: debouncedSearchRef.current }) },
+      isRefreshing: true,
+      dataCallback: (res: AdminAlertsResponse) => {
+        setAllAlerts(prev => append ? [...prev, ...(res.data ?? [])] : (res.data ?? []));
+        setHasMore(res.pagination ? res.pagination.page < res.pagination.totalPages : false);
+        setLoadingMore(false);
+      },
+    });
+  };
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       setDebouncedSearch(search);
+      setAllAlerts([]);
       setPage(1);
+      setHasMore(true);
+      setLoadingMore(false);
+      setSearchKey(k => k + 1);
     }, 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [search]);
 
-  const fetchData = useCallback(() => {
-    loadData({
-      api: API_ADMIN_ALERTS,
-      isRefreshing: true,
-      params: { page, limit, ...(debouncedSearch && { search: debouncedSearch }) },
-    });
-  }, [page, debouncedSearch]);
-
-  const fetchSparklines = useCallback(() => {
-    loadSparklines({ api: API_ADMIN_ALERTS_SPARKLINES });
+  useEffect(() => {
+    fetchPageRef.current(1, false);
+    loadSparklinesRef.current({ api: API_ADMIN_ALERTS_SPARKLINES });
   }, []);
 
   useEffect(() => {
-    fetchData();
-    fetchSparklines();
-  }, [fetchData, fetchSparklines]);
+    if (searchKey > 0) {
+      fetchPageRef.current(1, false);
+    }
+  }, [searchKey]);
+
+  useEffect(() => {
+    if (page > 1) {
+      fetchPageRef.current(page, true);
+    }
+  }, [page]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          setPage(p => p + 1);
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore]);
 
   const refetch = () => {
-    loadData({
-      api: API_ADMIN_ALERTS,
-      params: { page, limit, ...(search && { search }) },
-      isRefreshing: true,
-    });
-    loadSparklines({ api: API_ADMIN_ALERTS_SPARKLINES, isRefreshing: true });
+    setAllAlerts([]);
+    setPage(1);
+    setHasMore(true);
+    setLoadingMore(false);
+    fetchPageRef.current(1, false);
+    loadSparklinesRef.current({ api: API_ADMIN_ALERTS_SPARKLINES, params: { refresh: true }, isRefreshing: true });
   };
-
-  const { uploadData } = useGenericSet();
 
   const handleDelete = (alertId: string) => {
     if (!window.confirm('Are you sure you want to delete this alert?')) return;
@@ -68,10 +132,43 @@ export default function AlertsTable() {
     });
   };
 
-  const response = data as AdminAlertsResponse | null;
-  const alerts = response?.data ?? [];
-  const pagination = response?.pagination;
+  const alerts = allAlerts;
   const sparklinesMap = (sparklinesData as AdminAlertsSparklinesResponse | null)?.data ?? {};
+
+  const sortedAlerts = [...alerts].sort((a, b) => {
+    const dir = sortDirection === 'asc' ? 1 : -1;
+    let cmp = 0;
+    switch (sortColumn) {
+      case 'direction':
+        cmp = a.direction.localeCompare(b.direction);
+        break;
+      case 'pair':
+        cmp = `${a.base}/${a.target}`.localeCompare(`${b.base}/${b.target}`);
+        break;
+      case 'exchange':
+        cmp = a.exchange.localeCompare(b.exchange);
+        break;
+      case 'change':
+        cmp = a.changePct - b.changePct;
+        break;
+      case 'multiplier':
+        cmp = a.multiplier - b.multiplier;
+        break;
+      case 'volatility':
+        cmp = a.avgVolatility - b.avgVolatility;
+        break;
+      case 'price':
+        cmp = a.priceAtAlert - b.priceAtAlert;
+        break;
+      case 'user':
+        cmp = a.user.name.localeCompare(b.user.name);
+        break;
+      case 'createdAt':
+        cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        break;
+    }
+    return cmp * dir;
+  });
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -81,6 +178,21 @@ export default function AlertsTable() {
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  const formatRelativeTime = (dateString: string) => {
+    const now = Date.now();
+    const diff = now - new Date(dateString).getTime();
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (seconds < 60) return 'just now';
+    if (minutes < 60) return `${minutes}m`;
+    if (hours < 24) return `${hours}h`;
+    if (days < 30) return `${days}d`;
+    return formatDate(dateString);
   };
 
   const AlertSparkline = ({
@@ -138,22 +250,6 @@ export default function AlertsTable() {
     );
   };
 
-  if (loading && !data) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-gray-500">Loading alerts...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-4 text-red-600 bg-red-50 rounded-lg dark:bg-red-900/20">
-        Error: {error}
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -172,40 +268,67 @@ export default function AlertsTable() {
         </button>
       </div>
 
+      {error ? (
+        <div className="p-4 text-red-600 bg-red-50 rounded-lg dark:bg-red-900/20">
+          Error: {error}
+        </div>
+      ) : sortedAlerts.length === 0 ? (
+        <div className="flex items-center justify-center p-8">
+          <div className="text-gray-500">Loading alerts...</div>
+        </div>
+      ) : (
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
         <div className="max-w-full overflow-x-auto">
           <Table>
             <TableHeader className="bg-gray-50 dark:border-white/[0.05] dark:bg-gray-900">
               <TableRow>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                  Direction
+                  <button onClick={() => handleSort('direction')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200">
+                    Direction<SortIcon column="direction" />
+                  </button>
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                  Pair
+                  <button onClick={() => handleSort('pair')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200">
+                    Pair<SortIcon column="pair" />
+                  </button>
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                  Exchange
+                  <button onClick={() => handleSort('exchange')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200">
+                    Exchange<SortIcon column="exchange" />
+                  </button>
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                  Change
+                  <button onClick={() => handleSort('change')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200">
+                    Change<SortIcon column="change" />
+                  </button>
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                  Multiplier
+                  <button onClick={() => handleSort('multiplier')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200">
+                    Multiplier<SortIcon column="multiplier" />
+                  </button>
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                  Avg Volatility
+                  <button onClick={() => handleSort('volatility')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200">
+                    Avg Volatility<SortIcon column="volatility" />
+                  </button>
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                  Price at Alert
+                  <button onClick={() => handleSort('price')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200">
+                    Price at Alert<SortIcon column="price" />
+                  </button>
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                  User
+                  <button onClick={() => handleSort('user')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200">
+                    User<SortIcon column="user" />
+                  </button>
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                   Sparkline
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                  Created At
+                  <button onClick={() => handleSort('createdAt')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200">
+                    Created At<SortIcon column="createdAt" />
+                  </button>
                 </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                   Actions
@@ -214,7 +337,7 @@ export default function AlertsTable() {
             </TableHeader>
 
             <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-              {alerts.map((alert) => (
+              {sortedAlerts.map((alert) => (
                 <TableRow key={alert.id}>
                   <TableCell className="px-5 py-4 sm:px-6 text-start">
                     <Badge
@@ -225,9 +348,18 @@ export default function AlertsTable() {
                     </Badge>
                   </TableCell>
                   <TableCell className="px-4 py-3 text-gray-500 text-theme-sm dark:text-gray-400">
-                    <span className="font-medium text-gray-800 dark:text-white/90">
+                    <a
+                      href={
+                        alert.pairType === 'futures'
+                          ? `https://www.binance.com/en/futures/${alert.base}${alert.target}`
+                          : `https://www.binance.com/en/trade/${alert.base}_${alert.target}`
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline"
+                    >
                       {alert.base}/{alert.target}
-                    </span>
+                    </a>
                   </TableCell>
                   <TableCell className="px-4 py-3 text-gray-500 text-theme-sm dark:text-gray-400">
                     {alert.exchange}
@@ -269,7 +401,9 @@ export default function AlertsTable() {
                     />
                   </TableCell>
                   <TableCell className="px-4 py-3 text-gray-500 text-theme-sm dark:text-gray-400">
-                    {formatDate(alert.createdAt)}
+                    <span title={formatDate(alert.createdAt)}>
+                      {formatRelativeTime(alert.createdAt)}
+                    </span>
                   </TableCell>
                   <TableCell className="px-4 py-3">
                     <button
@@ -285,33 +419,16 @@ export default function AlertsTable() {
           </Table>
         </div>
       </div>
-
-      {pagination && (
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="text-sm text-gray-500">
-            Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, pagination.total)} of {pagination.total} alerts
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-white hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
-            >
-              Previous
-            </button>
-            <span className="px-4 py-2 text-sm text-gray-500">
-              Page {page} of {pagination.totalPages}
-            </span>
-            <button
-              onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
-              disabled={page === pagination.totalPages}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-white hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
-            >
-              Next
-            </button>
-          </div>
-        </div>
       )}
+
+      <div ref={sentinelRef} className="px-4 py-4">
+        {loadingMore && (
+          <div className="text-sm text-gray-500 text-center">Loading more alerts...</div>
+        )}
+        {!hasMore && sortedAlerts.length > 0 && (
+          <div className="text-sm text-gray-500 text-center">All {sortedAlerts.length} alerts loaded</div>
+        )}
+      </div>
     </div>
   );
 }
