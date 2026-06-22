@@ -27,6 +27,7 @@ export default function AlertsTable() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [sortColumn, setSortColumn] = useState<SortColumn>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const sentinelRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const { data, loading, error, loadData } = useGenericGetWeb();
@@ -123,13 +124,40 @@ export default function AlertsTable() {
     loadSparklinesRef.current({ api: API_ADMIN_ALERTS_SPARKLINES, params: { refresh: true }, isRefreshing: true });
   };
 
-  const handleDelete = (alertId: string) => {
-    if (!window.confirm('Are you sure you want to delete this alert?')) return;
-    uploadData({
-      api: API_ADMIN_ALERT_BY_ID(alertId),
-      method: 'delete',
-      dataCallback: () => refetch(),
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
     });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === sortedAlerts.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(sortedAlerts.map(a => a.id)));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.size} alert(s)?`)) return;
+    let completed = 0;
+    const total = selectedIds.size;
+    for (const id of selectedIds) {
+      uploadData({
+        api: API_ADMIN_ALERT_BY_ID(id),
+        method: 'delete',
+        dataCallback: () => {
+          completed++;
+          if (completed >= total) {
+            setSelectedIds(new Set());
+            refetch();
+          }
+        },
+      });
+    }
   };
 
   const alerts = allAlerts;
@@ -252,14 +280,24 @@ export default function AlertsTable() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <input
-          type="text"
-          placeholder="Search by pair, exchange, direction, or user..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-lg dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-        />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 flex-1">
+          <input
+            type="text"
+            placeholder="Search by pair, exchange, direction, or user..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg dark:border-gray-700 dark:bg-gray-800 dark:text-white flex-1"
+          />
+          {selectedIds.size > 0 && (
+            <button
+              onClick={handleBulkDelete}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+            >
+              Delete Selected ({selectedIds.size})
+            </button>
+          )}
+        </div>
         <button
           onClick={refetch}
           className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700"
@@ -282,6 +320,14 @@ export default function AlertsTable() {
           <Table>
             <TableHeader className="bg-gray-50 dark:border-white/[0.05] dark:bg-gray-900">
               <TableRow>
+                <TableCell isHeader className="px-4 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={sortedAlerts.length > 0 && selectedIds.size === sortedAlerts.length}
+                    onChange={toggleSelectAll}
+                    className="rounded border-gray-300 dark:border-gray-600"
+                  />
+                </TableCell>
                 <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                   <button onClick={() => handleSort('direction')} className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200">
                     Direction<SortIcon column="direction" />
@@ -330,15 +376,20 @@ export default function AlertsTable() {
                     Created At<SortIcon column="createdAt" />
                   </button>
                 </TableCell>
-                <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                  Actions
-                </TableCell>
               </TableRow>
             </TableHeader>
 
             <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
               {sortedAlerts.map((alert) => (
                 <TableRow key={alert.id}>
+                  <TableCell className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(alert.id)}
+                      onChange={() => toggleSelect(alert.id)}
+                      className="rounded border-gray-300 dark:border-gray-600"
+                    />
+                  </TableCell>
                   <TableCell className="px-5 py-4 sm:px-6 text-start">
                     <Badge
                       size="sm"
@@ -404,14 +455,6 @@ export default function AlertsTable() {
                     <span title={formatDate(alert.createdAt)}>
                       {formatRelativeTime(alert.createdAt)}
                     </span>
-                  </TableCell>
-                  <TableCell className="px-4 py-3">
-                    <button
-                      onClick={() => handleDelete(alert.id)}
-                      className="px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 dark:text-red-400 dark:bg-red-900/20 dark:hover:bg-red-900/40"
-                    >
-                      Delete
-                    </button>
                   </TableCell>
                 </TableRow>
               ))}

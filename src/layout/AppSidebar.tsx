@@ -19,6 +19,13 @@ const sidebarSections = [
     ],
   },
   {
+    title: "Bot",
+    items: [
+      { name: "Backtest", path: "/admin/backtest" },
+      { name: "History", path: "/admin/backtest-history" },
+    ],
+  },
+  {
     title: "Pages",
     items: [
       { name: "Settings", path: "/admin/settings" },

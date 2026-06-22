@@ -238,3 +238,114 @@ export interface AdminDashboardStatsResponse {
   success: boolean;
   data: DashboardStats;
 }
+
+// Backtest types
+export interface BacktestStrategyConfig {
+  strategyId: string;
+  params: Record<string, number>;
+}
+
+export interface BacktestRiskConfig {
+  stopLossPct: number;
+  trailingActivationPct: number;
+  trailingOffsetPct: number;
+}
+
+export interface BacktestPositionSizing {
+  entries: number[];
+  maxEntries: number;
+}
+
+export interface BacktestRequest {
+  exchange: string;
+  base: string;
+  target: string;
+  type: string;
+  interval: string;
+  startDate: string;
+  endDate: string;
+  strategy: BacktestStrategyConfig;
+  riskManagement: BacktestRiskConfig;
+  positionSizing: BacktestPositionSizing;
+  initialCap: number;
+  fees: number;
+  name?: string;
+}
+
+export interface BacktestTrade {
+  side: string;
+  entryPrice: number;
+  exitPrice: number | null;
+  entryTime: string;
+  exitTime: string | null;
+  quantity: number;
+  pnl: number | null;
+  pnlPercent: number | null;
+  exitReason: string | null;
+  entryCount: number;
+  entries: { time: string; price: number }[];
+}
+
+export interface BacktestCandle {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface BacktestResult {
+  id: string;
+  name?: string;
+  exchange: string;
+  base: string;
+  target: string;
+  type: string;
+  interval: string;
+  startDate: string;
+  endDate: string;
+  strategy: BacktestStrategyConfig;
+  riskManagement: BacktestRiskConfig;
+  positionSizing: BacktestPositionSizing;
+  initialCap: number;
+  finalCap: number;
+  totalReturn: number;
+  winRate: number;
+  maxDrawdown: number;
+  sharpeRatio: number;
+  totalTrades: number;
+  fees: number;
+  trades: BacktestTrade[];
+  equityCurve: { time: number; value: number }[];
+  candles?: BacktestCandle[];
+}
+
+export interface BacktestRunResponse {
+  success: boolean;
+  data?: BacktestResult;
+  message?: string;
+}
+
+export interface BacktestListResponse {
+  success: boolean;
+  data: BacktestResult[];
+  message?: string;
+}
+
+export interface StrategyParamDef {
+  key: string;
+  label: string;
+  type: 'number';
+  default: number;
+  min?: number;
+  max?: number;
+  step?: number;
+}
+
+export interface StrategyInfo {
+  id: string;
+  name: string;
+  description: string;
+  paramDefs: StrategyParamDef[];
+}

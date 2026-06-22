@@ -24,6 +24,9 @@ import AdminSettings from "./pages/Admin/Settings";
 import AdminMonitor from "./pages/Admin/Monitor";
 import AdminAlerts from "./pages/Admin/Alerts";
 import AdminPerformance from "./pages/Admin/Performance";
+import AdminBacktest from "./pages/Admin/Backtest";
+import AdminBacktestHistory from "./pages/Admin/BacktestHistory";
+import AdminBacktestView from "./pages/Admin/BacktestView";
 
 export default function App() {
   return (
@@ -64,6 +67,9 @@ export default function App() {
             <Route path="/admin/monitor" element={<AdminMonitor />} />
             <Route path="/admin/alerts" element={<AdminAlerts />} />
             <Route path="/admin/performance" element={<AdminPerformance />} />
+            <Route path="/admin/backtest" element={<AdminBacktest />} />
+            <Route path="/admin/backtest-history" element={<AdminBacktestHistory />} />
+            <Route path="/admin/backtest/:id" element={<AdminBacktestView />} />
           </Route>
 
           {/* Auth Routes - Redirect to dashboard if already authenticated */}

@@ -31,3 +31,10 @@ export const API_SETTINGS = '/settings';
 // Monitor endpoints
 export const API_ADMIN_MONITOR_STATS = '/admin/monitor/stats';
 export const API_ADMIN_MONITOR_PERFORMANCE = '/admin/monitor/performance';
+
+// Backtest endpoints
+export const API_ADMIN_BACKTEST_RUN = '/admin/backtest/run';
+export const API_ADMIN_BACKTEST_SAVE = '/admin/backtest/save';
+export const API_ADMIN_BACKTEST_LIST = '/admin/backtest';
+export const API_ADMIN_BACKTEST_BY_ID = (id: string) => `/admin/backtest/${id}`;
+export const API_ADMIN_BACKTEST_CANDLES = '/admin/backtest/candles';
