@@ -89,6 +89,74 @@ const STRATEGIES = [
       },
     ],
   },
+  {
+    id: "adaptive-rsi-trend",
+    name: "Adaptive RSI Trend",
+    description: "Switches between RSI mean-reversion in ranging markets (ADX low) and EMA trend-following in trending markets (ADX high). Auto-adapts to market conditions.",
+    groups: [
+      {
+        key: "adxRegime",
+        label: "ADX Regime",
+        paramDefs: [
+          { key: "adxPeriod", label: "ADX Period", default: 14, min: 5, max: 50, step: 1 },
+          { key: "adxThreshold", label: "ADX Threshold", default: 40, min: 10, max: 50, step: 1 },
+        ],
+      },
+      {
+        key: "rangeMode",
+        label: "Range Mode",
+        paramDefs: [
+          { key: "rangeRsiPeriod", label: "RSI Period", default: 7, min: 2, max: 50, step: 1 },
+          { key: "rangeRsiOversold", label: "RSI Oversold (<)", default: 15, min: 5, max: 50, step: 1 },
+          { key: "rangeRsiOverbought", label: "RSI Overbought (>)", default: 85, min: 50, max: 95, step: 1 },
+          { key: "rangeRsiExitLong", label: "RSI Exit Long (>)", default: 55, min: 40, max: 90, step: 1 },
+          { key: "rangeRsiExitShort", label: "RSI Exit Short (<)", default: 45, min: 10, max: 60, step: 1 },
+          { key: "rangeStopLossPct", label: "Range Stop Loss %", default: 4, min: 1, max: 15, step: 1 },
+        ],
+      },
+      {
+        key: "trendMode",
+        label: "Trend Mode",
+        paramDefs: [
+          { key: "trendFastEMA", label: "Fast EMA Period", default: 100, min: 5, max: 200, step: 1 },
+          { key: "trendSlowEMA", label: "Slow EMA Period", default: 200, min: 10, max: 400, step: 1 },
+          { key: "trendRsiPullbackLong", label: "RSI Pullback Long (<)", default: 35, min: 5, max: 80, step: 1 },
+          { key: "trendRsiPullbackShort", label: "RSI Pullback Short (>)", default: 65, min: 20, max: 95, step: 1 },
+        ],
+      },
+      {
+        key: "long",
+        label: "Long",
+        paramDefs: [
+          { key: "longFirstPct", label: "First Entry %", default: 100, min: 5, max: 100, step: 5 },
+          { key: "longStopLoss", label: "Stop Loss %", default: 10, min: 1, max: 50, step: 1 },
+          { key: "longTrailingEnabled", label: "Trailing", default: 1, min: 0, max: 1, step: 1 },
+          { key: "longTrailingActivationPct", label: "Trailing Activation %", default: 25, min: 1, max: 100, step: 1 },
+          { key: "longTrailingOffsetPct", label: "Trailing Offset %", default: 15, min: 1, max: 50, step: 1 },
+        ],
+      },
+      {
+        key: "short",
+        label: "Short",
+        paramDefs: [
+          { key: "shortFirstPct", label: "First Entry %", default: 100, min: 5, max: 100, step: 5 },
+          { key: "shortStopLoss", label: "Stop Loss %", default: 10, min: 1, max: 50, step: 1 },
+          { key: "shortTrailingEnabled", label: "Trailing", default: 1, min: 0, max: 1, step: 1 },
+          { key: "shortTrailingActivationPct", label: "Trailing Activation %", default: 25, min: 1, max: 100, step: 1 },
+          { key: "shortTrailingOffsetPct", label: "Trailing Offset %", default: 15, min: 1, max: 50, step: 1 },
+        ],
+      },
+      {
+        key: "direction",
+        label: "Direction",
+        paramDefs: [
+          { key: "directionFilter", label: "Direction (0=Both, 1=Long, 2=Short)", default: 0, min: 0, max: 2, step: 1 },
+          { key: "reversed", label: "Reversed", default: 0, min: 0, max: 1, step: 1 },
+          { key: "takeProfitPct", label: "Take Profit %", default: 10, min: 1, max: 50, step: 1 },
+        ],
+      },
+    ],
+  },
 ];
 
 const DEFAULT_CONFIG: BacktestRequest = {
@@ -554,20 +622,34 @@ export default function AdminBacktest() {
                                 {def.label}
                               </label>
                               {def.key === "directionFilter" ? (
-                                <select
-                                  value={config.strategy.params[def.key] ?? def.default}
-                                  onChange={(e) => updateStrategyParam(def.key, Number(e.target.value))}
-                                  disabled={disabled}
-                                  className={`w-[100px] rounded-md border px-1.5 py-1 text-sm ${
-                                    disabled
-                                      ? "border-gray-200 bg-gray-100 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed"
-                                      : "border-gray-300 bg-white text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                                  }`}
-                                >
-                                  <option value={0}>Both</option>
-                                  <option value={1}>Long</option>
-                                  <option value={2}>Short</option>
-                                </select>
+                                 <select
+                                   value={config.strategy.params[def.key] ?? def.default}
+                                   onChange={(e) => updateStrategyParam(def.key, Number(e.target.value))}
+                                   disabled={disabled}
+                                   className={`w-[100px] rounded-md border px-1.5 py-1 text-sm ${
+                                     disabled
+                                       ? "border-gray-200 bg-gray-100 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed"
+                                       : "border-gray-300 bg-white text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                                   }`}
+                                 >
+                                   <option value={0}>Both</option>
+                                   <option value={1}>Long</option>
+                                   <option value={2}>Short</option>
+                                 </select>
+                               ) : def.key === "reversed" ? (
+                                 <select
+                                   value={config.strategy.params[def.key] ?? def.default}
+                                   onChange={(e) => updateStrategyParam(def.key, Number(e.target.value))}
+                                   disabled={disabled}
+                                   className={`w-[100px] rounded-md border px-1.5 py-1 text-sm ${
+                                     disabled
+                                       ? "border-gray-200 bg-gray-100 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed"
+                                       : "border-gray-300 bg-white text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                                   }`}
+                                 >
+                                   <option value={0}>No</option>
+                                   <option value={1}>Yes</option>
+                                 </select>
                               ) : (
                                 <input
                                   type="number"
@@ -679,7 +761,14 @@ export default function AdminBacktest() {
 
             {result.candles && result.candles.length > 0 && (
               <ComponentCard title={`Price History — ${result.base}/${result.target} (${result.interval})`}>
-                <CandleChart candles={result.candles} trades={result.trades} fastEMAPeriod={result.strategy.params.fastEMA} slowEMAPeriod={result.strategy.params.slowEMA} emaEnabled={result.strategy.params.emaEnabled !== 0} adxEnabled={result.strategy.params.adxEnabled !== 0} rsiEnabled={result.strategy.params.rsiEnabled !== 0} rsiPeriod={result.strategy.params.rsiPeriod} />
+                <CandleChart candles={result.candles} trades={result.trades}
+                  fastEMAPeriod={result.strategy.params.fastEMA ?? result.strategy.params.trendFastEMA}
+                  slowEMAPeriod={result.strategy.params.slowEMA ?? result.strategy.params.trendSlowEMA}
+                  emaEnabled={result.strategy.params.emaEnabled !== 0}
+                  adxEnabled={result.strategy.params.adxEnabled !== 0}
+                  rsiEnabled={result.strategy.params.rsiEnabled !== 0}
+                  rsiPeriod={result.strategy.params.rsiPeriod ?? result.strategy.params.rangeRsiPeriod}
+                />
               </ComponentCard>
             )}
 

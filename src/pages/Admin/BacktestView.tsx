@@ -283,7 +283,14 @@ export default function AdminBacktestView() {
                 </button>
               </div>
             </div>
-            <CandleChart key={String(fullscreen)} candles={candles} trades={result.trades} fastEMAPeriod={result.strategy.params.fastEMA} slowEMAPeriod={result.strategy.params.slowEMA} emaEnabled={result.strategy.params.emaEnabled !== 0} adxEnabled={result.strategy.params.adxEnabled !== 0} rsiEnabled={result.strategy.params.rsiEnabled !== 0} rsiPeriod={result.strategy.params.rsiPeriod} />
+            <CandleChart key={String(fullscreen)} candles={candles} trades={result.trades}
+              fastEMAPeriod={result.strategy.params.fastEMA ?? result.strategy.params.trendFastEMA}
+              slowEMAPeriod={result.strategy.params.slowEMA ?? result.strategy.params.trendSlowEMA}
+              emaEnabled={result.strategy.params.emaEnabled !== 0}
+              adxEnabled={result.strategy.params.adxEnabled !== 0}
+              rsiEnabled={result.strategy.params.rsiEnabled !== 0}
+              rsiPeriod={result.strategy.params.rsiPeriod ?? result.strategy.params.rangeRsiPeriod}
+            />
           </div>
           </div>
         </ComponentCard>
