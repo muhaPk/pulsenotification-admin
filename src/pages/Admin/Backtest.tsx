@@ -157,6 +157,68 @@ const STRATEGIES = [
       },
     ],
   },
+  {
+    id: "mean-reversion",
+    name: "Mean Reversion",
+    description: "Flat direction: BUY when RSI < oversold threshold (default 25), SELL when RSI > overbought threshold (default 75). Exits when RSI crosses back toward the midline. Pure mean-reversion on a single pair.",
+    groups: [
+      {
+        key: "rsi",
+        label: "RSI",
+        paramDefs: [
+          { key: "rsiPeriod", label: "RSI Period", default: 14, min: 2, max: 50, step: 1 },
+          { key: "rsiOversoldThreshold", label: "Oversold (<)", default: 25, min: 5, max: 45, step: 1 },
+          { key: "rsiOverboughtThreshold", label: "Overbought (>)", default: 75, min: 55, max: 95, step: 1 },
+        ],
+      },
+      {
+        key: "exit",
+        label: "Exit",
+        paramDefs: [
+          { key: "rsiExitLong", label: "Exit Long RSI (>)", default: 50, min: 30, max: 80, step: 1 },
+          { key: "rsiExitShort", label: "Exit Short RSI (<)", default: 50, min: 20, max: 70, step: 1 },
+        ],
+      },
+      {
+        key: "direction",
+        label: "Direction",
+        paramDefs: [
+          { key: "directionFilter", label: "Direction (0=Both, 1=Long, 2=Short)", default: 0, min: 0, max: 2, step: 1 },
+          { key: "slCooldownCandles", label: "SL Cooldown Candles", default: 0, min: 0, max: 50, step: 1 },
+        ],
+      },
+      {
+        key: "long",
+        label: "Long",
+        paramDefs: [
+          { key: "longFirstPct", label: "First Entry %", default: 100, min: 5, max: 100, step: 5 },
+          { key: "longAddonEnabled", label: "Add-on", default: 0, min: 0, max: 1, step: 1 },
+          { key: "longAddonPct", label: "Add-on %", default: 60, min: 0, max: 100, step: 5 },
+          { key: "longAddonTriggerPct", label: "Add-on Trigger (%)", default: -3, min: -20, max: 0, step: 1 },
+          { key: "longAddonStopLoss", label: "Add-on Stop Loss %", default: 0, min: 0, max: 50, step: 1 },
+          { key: "longStopLoss", label: "Stop Loss %", default: 6, min: 1, max: 50, step: 1 },
+          { key: "longTrailingEnabled", label: "Trailing", default: 1, min: 0, max: 1, step: 1 },
+          { key: "longTrailingActivationPct", label: "Trailing Activation %", default: 8, min: 1, max: 100, step: 1 },
+          { key: "longTrailingOffsetPct", label: "Trailing Offset %", default: 4, min: 1, max: 50, step: 1 },
+        ],
+      },
+      {
+        key: "short",
+        label: "Short",
+        paramDefs: [
+          { key: "shortFirstPct", label: "First Entry %", default: 100, min: 5, max: 100, step: 5 },
+          { key: "shortAddonEnabled", label: "Add-on", default: 0, min: 0, max: 1, step: 1 },
+          { key: "shortAddonPct", label: "Add-on %", default: 40, min: 0, max: 100, step: 5 },
+          { key: "shortAddonTriggerPct", label: "Add-on Trigger (%)", default: 3, min: 0, max: 20, step: 1 },
+          { key: "shortAddonStopLoss", label: "Add-on Stop Loss %", default: 0, min: 0, max: 50, step: 1 },
+          { key: "shortStopLoss", label: "Stop Loss %", default: 6, min: 1, max: 50, step: 1 },
+          { key: "shortTrailingEnabled", label: "Trailing", default: 1, min: 0, max: 1, step: 1 },
+          { key: "shortTrailingActivationPct", label: "Trailing Activation %", default: 8, min: 1, max: 100, step: 1 },
+          { key: "shortTrailingOffsetPct", label: "Trailing Offset %", default: 4, min: 1, max: 50, step: 1 },
+        ],
+      },
+    ],
+  },
 ];
 
 const DEFAULT_CONFIG: BacktestRequest = {
@@ -598,14 +660,14 @@ export default function AdminBacktest() {
                     .filter(d => depMap[d.key])
                     .map(t => ({ toggle: t, deps: depMap[t.key].map(k => group.paramDefs.find(d => d.key === k)!).filter(Boolean) }));
                   const offMap: Record<string, boolean> = {
-                    emaEnabled: (config.strategy.params.emaEnabled ?? 1) === 0,
-                    adxEnabled: (config.strategy.params.adxEnabled ?? 1) === 0,
-                    rsiEnabled: (config.strategy.params.rsiEnabled ?? 1) === 0,
-                    biasEnabled: (config.strategy.params.biasEnabled ?? 1) === 0,
-                    longAddonEnabled: (config.strategy.params.longAddonEnabled ?? 1) === 0,
-                    shortAddonEnabled: (config.strategy.params.shortAddonEnabled ?? 1) === 0,
-                    longTrailingEnabled: (config.strategy.params.longTrailingEnabled ?? 1) === 0,
-                    shortTrailingEnabled: (config.strategy.params.shortTrailingEnabled ?? 1) === 0,
+                    emaEnabled: (config.strategy.params.emaEnabled ?? 0) === 0,
+                    adxEnabled: (config.strategy.params.adxEnabled ?? 0) === 0,
+                    rsiEnabled: (config.strategy.params.rsiEnabled ?? 0) === 0,
+                    biasEnabled: (config.strategy.params.biasEnabled ?? 0) === 0,
+                    longAddonEnabled: (config.strategy.params.longAddonEnabled ?? 0) === 0,
+                    shortAddonEnabled: (config.strategy.params.shortAddonEnabled ?? 0) === 0,
+                    longTrailingEnabled: (config.strategy.params.longTrailingEnabled ?? 0) === 0,
+                    shortTrailingEnabled: (config.strategy.params.shortTrailingEnabled ?? 0) === 0,
                   };
                   return (
                     <>
@@ -613,8 +675,8 @@ export default function AdminBacktest() {
                         <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-6">
                           {standalone.map(def => {
                             const slDisabled =
-                              (def.key === "longStopLoss" && (config.strategy.params.longAddonEnabled ?? 1) !== 0) ||
-                              (def.key === "shortStopLoss" && (config.strategy.params.shortAddonEnabled ?? 1) !== 0);
+                              (def.key === "longStopLoss" && (config.strategy.params.longAddonEnabled ?? 0) !== 0) ||
+                              (def.key === "shortStopLoss" && (config.strategy.params.shortAddonEnabled ?? 0) !== 0);
                             const disabled = slDisabled;
                             return (
                             <div key={def.key}>
@@ -654,7 +716,20 @@ export default function AdminBacktest() {
                                 <input
                                   type="number"
                                   value={config.strategy.params[def.key] ?? def.default}
-                                  onChange={(e) => updateStrategyParam(def.key, Number(e.target.value))}
+                                  onChange={(e) => {
+                                    const val = Number(e.target.value);
+                                    updateStrategyParam(def.key, val);
+                                    if (def.key === "longFirstPct") {
+                                      const addonMax = Math.max(0, 100 - val);
+                                      const curAddon = config.strategy.params.longAddonPct ?? 60;
+                                      if (curAddon > addonMax) updateStrategyParam("longAddonPct", addonMax);
+                                    }
+                                    if (def.key === "shortFirstPct") {
+                                      const addonMax = Math.max(0, 100 - val);
+                                      const curAddon = config.strategy.params.shortAddonPct ?? 40;
+                                      if (curAddon > addonMax) updateStrategyParam("shortAddonPct", addonMax);
+                                    }
+                                  }}
                                   min={def.min} max={def.max} step={def.step}
                                   disabled={disabled}
                                   className={`w-[100px] rounded-md border px-1.5 py-1 text-sm ${
@@ -688,7 +763,14 @@ export default function AdminBacktest() {
                                 {off ? "OFF" : "ON"}
                               </span>
                             </label>
-                            {deps.map(def => (
+                            {deps.map(def => {
+                              const effectiveMax =
+                                def.key === "longAddonPct"
+                                  ? Math.max(0, 100 - (config.strategy.params.longFirstPct ?? 100))
+                                  : def.key === "shortAddonPct"
+                                    ? Math.max(0, 100 - (config.strategy.params.shortFirstPct ?? 100))
+                                    : def.max;
+                              return (
                               <div key={def.key}>
                                 <label className={`mb-0.5 block text-xs font-medium ${
                                   off
@@ -704,8 +786,11 @@ export default function AdminBacktest() {
                                 <input
                                   type="number"
                                   value={config.strategy.params[def.key] ?? def.default}
-                                  onChange={(e) => updateStrategyParam(def.key, Number(e.target.value))}
-                                  min={def.min} max={def.max} step={def.step}
+                                  onChange={(e) => {
+                                    const val = Math.min(Number(e.target.value), effectiveMax);
+                                    updateStrategyParam(def.key, val);
+                                  }}
+                                  min={def.min} max={effectiveMax} step={def.step}
                                   disabled={off}
                                   className={`w-[100px] rounded-md border px-1.5 py-1 text-sm ${
                                     off
@@ -714,7 +799,8 @@ export default function AdminBacktest() {
                                   }`}
                                 />
                               </div>
-                            ))}
+                            );
+                          })}
                           </div>
                         );
                       })}
