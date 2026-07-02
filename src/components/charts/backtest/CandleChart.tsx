@@ -358,7 +358,7 @@ export default function CandleChart({ candles, trades, fastEMAPeriod = 50, slowE
           color: isLong ? "#22C55E" : "#EF4444",
           shape: "circle",
           size: 0,
-          text: isLong ? (idx === 0 ? " L " : " L2") : (idx === 0 ? " S " : " S2"),
+          text: isLong ? (idx === 0 ? " L " : ` L${idx + 1} `) : (idx === 0 ? " S " : ` S${idx + 1} `),
         });
       });
       if (t.exitPrice != null && t.exitTime) {

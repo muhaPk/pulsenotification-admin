@@ -219,6 +219,53 @@ const STRATEGIES = [
       },
     ],
   },
+  {
+    id: "trend-accumulation",
+    name: "Trend Accumulation",
+    description: "DCA + Pullback: accumulates positions during uptrend (EMA50>EMA200, ADX>25). First entry on trend flip, DCA entries on RSI oversold pullbacks. Exits via trailing stop or trend reversal.",
+    groups: [
+      {
+        key: "trend",
+        label: "Trend",
+        paramDefs: [
+          { key: "emaFast", label: "Fast EMA", default: 50, min: 10, max: 200, step: 1 },
+          { key: "emaSlow", label: "Slow EMA", default: 200, min: 50, max: 400, step: 1 },
+          { key: "emaEntry", label: "Entry EMA", default: 20, min: 5, max: 100, step: 1 },
+          { key: "adxPeriod", label: "ADX Period", default: 14, min: 7, max: 50, step: 1 },
+          { key: "adxThreshold", label: "ADX Threshold (>)", default: 25, min: 15, max: 50, step: 1 },
+        ],
+      },
+      {
+        key: "dca",
+        label: "DCA",
+        paramDefs: [
+          { key: "rsiPeriod", label: "RSI Period", default: 14, min: 7, max: 50, step: 1 },
+          { key: "rsiOversold", label: "RSI Oversold (<)", default: 38, min: 20, max: 45, step: 1 },
+          { key: "dcaMaxEntries", label: "Max DCA Entries", default: 5, min: 1, max: 10, step: 1 },
+          { key: "dcaMinDropPct", label: "Min Drop % for DCA", default: 3, min: 1, max: 10, step: 0.5 },
+        ],
+      },
+      {
+        key: "sizing",
+        label: "Sizing",
+        paramDefs: [
+          { key: "longFirstPct", label: "First Entry %", default: 30, min: 5, max: 100, step: 5 },
+          { key: "longAddonPct", label: "Addon %", default: 20, min: 5, max: 100, step: 5 },
+        ],
+      },
+      {
+        key: "exit",
+        label: "Exit",
+        paramDefs: [
+          { key: "longStopLoss", label: "Stop Loss %", default: 10, min: 1, max: 30, step: 1 },
+          { key: "longTrailingEnabled", label: "Trailing", default: 1, min: 0, max: 1, step: 1 },
+          { key: "longTrailingActivationPct", label: "Trail Activation %", default: 5, min: 1, max: 20, step: 1 },
+          { key: "longTrailingOffsetPct", label: "Trail Offset %", default: 3, min: 1, max: 10, step: 1 },
+          { key: "exitCooldownCandles", label: "Exit Cooldown", default: 3, min: 0, max: 20, step: 1 },
+        ],
+      },
+    ],
+  },
 ];
 
 const DEFAULT_CONFIG: BacktestRequest = {
