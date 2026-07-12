@@ -38,3 +38,14 @@ export const API_ADMIN_BACKTEST_SAVE = '/admin/backtest/save';
 export const API_ADMIN_BACKTEST_LIST = '/admin/backtest';
 export const API_ADMIN_BACKTEST_BY_ID = (id: string) => `/admin/backtest/${id}`;
 export const API_ADMIN_BACKTEST_CANDLES = '/admin/backtest/candles';
+
+// Trading endpoints
+export const API_ADMIN_TRADING_API_KEYS = '/admin/trading/api-keys';
+export const API_ADMIN_TRADING_API_KEY_BY_ID = (id: string) => `/admin/trading/api-keys/${id}`;
+export const API_ADMIN_TRADING_BALANCE = '/admin/trading/balance';
+export const API_ADMIN_TRADING_ORDERS = '/admin/trading/orders';
+export const API_ADMIN_TRADING_ORDER_BY_ID = (orderId: string) => `/admin/trading/orders/${orderId}`;
+export const API_ADMIN_TRADING_BOTS = '/admin/trading/bots';
+export const API_ADMIN_TRADING_BOT_BY_ID = (id: string) => `/admin/trading/bots/${id}`;
+export const API_ADMIN_TRADING_TRADES = '/admin/trading/trades';
+export const API_ADMIN_TRADING_POSITIONS = '/admin/trading/positions';

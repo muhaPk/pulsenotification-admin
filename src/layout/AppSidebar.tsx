@@ -23,6 +23,7 @@ const sidebarSections = [
     items: [
       { name: "Backtest", path: "/admin/backtest" },
       { name: "History", path: "/admin/backtest-history" },
+      { name: "Live Trading", path: "/admin/live-trading" },
     ],
   },
   {

@@ -2,292 +2,30 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router";
 import PageMeta from "../../components/common/PageMeta";
 import ComponentCard from "../../components/common/ComponentCard";
+import StrategyParamsForm from "../../components/common/StrategyParamsForm";
 import { useGenericSet } from "../../hooks/useGenericSetWeb";
 import { useAxios } from "../../hooks/useAxiosWeb";
 import { API_ADMIN_BACKTEST_RUN, API_ADMIN_BACKTEST_LIST } from "../../config/endpoints";
+import { STRATEGIES, initParams } from "../../config/strategies";
 import { EquityCurveChart, DrawdownChart, TradePnlChart } from "../../components/charts/backtest/BacktestCharts";
 import CandleChart from "../../components/charts/backtest/CandleChart";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../../components/ui/table";
 import type { BacktestResult, BacktestRequest, BacktestTrade, BacktestListResponse } from "../../types/admin";
 
-const STRATEGIES = [
-  {
-    id: "trend-pullback",
-    name: "Trend Pullback",
-    description: "Directional strategy: LONG on pullbacks in uptrend, SHORT on bounces in downtrend. Uses EMA50/200 for trend, ADX > 25 for strength, RSI for entry timing. Includes yearly-range position biasing, scale-in add-ons, and trailing stops.",
-    groups: [
-      {
-        key: "ema",
-        label: "EMA",
-        paramDefs: [
-          { key: "emaEnabled", label: "EMA Filter", default: 1, min: 0, max: 1, step: 1 },
-          { key: "fastEMA", label: "Fast EMA Period", default: 50, min: 5, max: 200, step: 1 },
-          { key: "slowEMA", label: "Slow EMA Period", default: 200, min: 10, max: 400, step: 1 },
-          { key: "directionFilter", label: "Direction (0=Both, 1=Long, 2=Short)", default: 0, min: 0, max: 2, step: 1 },
-        ],
-      },
-      {
-        key: "adx",
-        label: "ADX",
-        paramDefs: [
-          { key: "adxEnabled", label: "ADX Filter", default: 1, min: 0, max: 1, step: 1 },
-          { key: "adxPeriod", label: "ADX Period", default: 14, min: 5, max: 50, step: 1 },
-          { key: "adxThreshold", label: "ADX Threshold (>)", default: 25, min: 5, max: 50, step: 1 },
-        ],
-      },
-      {
-        key: "rsi",
-        label: "RSI",
-        paramDefs: [
-          { key: "rsiEnabled", label: "RSI Filter", default: 1, min: 0, max: 1, step: 1 },
-          { key: "rsiPeriod", label: "RSI Period", default: 14, min: 2, max: 50, step: 1 },
-          { key: "rsiLongThreshold", label: "RSI Long Entry (<)", default: 40, min: 5, max: 95, step: 1 },
-          { key: "rsiShortThreshold", label: "RSI Short Entry (>)", default: 65, min: 5, max: 95, step: 1 },
-        ],
-      },
-      {
-        key: "bias",
-        label: "Yearly Range Bias",
-        paramDefs: [
-          { key: "biasEnabled", label: "Yearly Range Bias", default: 1, min: 0, max: 1, step: 1 },
-          { key: "yearlyRangeLookback", label: "Lookback", default: 8760, min: 100, max: 100000, step: 100 },
-          { key: "biasZoneTop", label: "Bias Short Zone Top %", default: 80, min: 50, max: 100, step: 1 },
-          { key: "biasZoneBottom", label: "Bias Long Zone Bottom %", default: 20, min: 0, max: 50, step: 1 },
-        ],
-      },
-      {
-        key: "long",
-        label: "Long",
-        paramDefs: [
-          { key: "longFirstPct", label: "First Entry %", default: 40, min: 5, max: 100, step: 5 },
-          { key: "longAddonEnabled", label: "Add-on", default: 1, min: 0, max: 1, step: 1 },
-          { key: "longAddonPct", label: "Add-on %", default: 60, min: 0, max: 100, step: 5 },
-          { key: "longAddonTriggerPct", label: "Add-on Trigger (%)", default: -3, min: -20, max: 0, step: 1 },
-          { key: "longAddonStopLoss", label: "Add-on Stop Loss %", default: 0, min: 0, max: 50, step: 1 },
-          { key: "longStopLoss", label: "Stop Loss %", default: 6, min: 1, max: 50, step: 1 },
-          { key: "longTrailingEnabled", label: "Trailing", default: 1, min: 0, max: 1, step: 1 },
-          { key: "longTrailingActivationPct", label: "Trailing Activation %", default: 8, min: 1, max: 100, step: 1 },
-          { key: "longTrailingOffsetPct", label: "Trailing Offset %", default: 4, min: 1, max: 50, step: 1 },
-          { key: "longRetryOffsetTrailingPct", label: "Re-entry Trailing %", default: 2, min: 0, max: 20, step: 0.5 },
-        ],
-      },
-      {
-        key: "short",
-        label: "Short",
-        paramDefs: [
-          { key: "shortFirstPct", label: "First Entry %", default: 60, min: 5, max: 100, step: 5 },
-          { key: "shortAddonEnabled", label: "Add-on", default: 1, min: 0, max: 1, step: 1 },
-          { key: "shortAddonPct", label: "Add-on %", default: 40, min: 0, max: 100, step: 5 },
-          { key: "shortAddonTriggerPct", label: "Add-on Trigger (%)", default: 3, min: 0, max: 20, step: 1 },
-          { key: "shortAddonStopLoss", label: "Add-on Stop Loss %", default: 0, min: 0, max: 50, step: 1 },
-          { key: "shortStopLoss", label: "Stop Loss %", default: 5, min: 1, max: 50, step: 1 },
-          { key: "shortTrailingEnabled", label: "Trailing", default: 1, min: 0, max: 1, step: 1 },
-          { key: "shortTrailingActivationPct", label: "Trailing Activation %", default: 6, min: 1, max: 100, step: 1 },
-          { key: "shortTrailingOffsetPct", label: "Trailing Offset %", default: 3, min: 1, max: 50, step: 1 },
-          { key: "shortRetryOffsetTrailingPct", label: "Re-entry Trailing %", default: 2, min: 0, max: 20, step: 0.5 },
-        ],
-      },
-    ],
-  },
-  {
-    id: "adaptive-rsi-trend",
-    name: "Adaptive RSI Trend",
-    description: "Switches between RSI mean-reversion in ranging markets (ADX low) and EMA trend-following in trending markets (ADX high). Auto-adapts to market conditions.",
-    groups: [
-      {
-        key: "adxRegime",
-        label: "ADX Regime",
-        paramDefs: [
-          { key: "adxPeriod", label: "ADX Period", default: 14, min: 5, max: 50, step: 1 },
-          { key: "adxThreshold", label: "ADX Threshold", default: 40, min: 10, max: 50, step: 1 },
-        ],
-      },
-      {
-        key: "rangeMode",
-        label: "Range Mode",
-        paramDefs: [
-          { key: "rangeRsiPeriod", label: "RSI Period", default: 7, min: 2, max: 50, step: 1 },
-          { key: "rangeRsiOversold", label: "RSI Oversold (<)", default: 15, min: 5, max: 50, step: 1 },
-          { key: "rangeRsiOverbought", label: "RSI Overbought (>)", default: 85, min: 50, max: 95, step: 1 },
-          { key: "rangeRsiExitLong", label: "RSI Exit Long (>)", default: 55, min: 40, max: 90, step: 1 },
-          { key: "rangeRsiExitShort", label: "RSI Exit Short (<)", default: 45, min: 10, max: 60, step: 1 },
-          { key: "rangeStopLossPct", label: "Range Stop Loss %", default: 4, min: 1, max: 15, step: 1 },
-        ],
-      },
-      {
-        key: "trendMode",
-        label: "Trend Mode",
-        paramDefs: [
-          { key: "trendFastEMA", label: "Fast EMA Period", default: 100, min: 5, max: 200, step: 1 },
-          { key: "trendSlowEMA", label: "Slow EMA Period", default: 200, min: 10, max: 400, step: 1 },
-          { key: "trendRsiPullbackLong", label: "RSI Pullback Long (<)", default: 35, min: 5, max: 80, step: 1 },
-          { key: "trendRsiPullbackShort", label: "RSI Pullback Short (>)", default: 65, min: 20, max: 95, step: 1 },
-        ],
-      },
-      {
-        key: "long",
-        label: "Long",
-        paramDefs: [
-          { key: "longFirstPct", label: "First Entry %", default: 100, min: 5, max: 100, step: 5 },
-          { key: "longStopLoss", label: "Stop Loss %", default: 10, min: 1, max: 50, step: 1 },
-          { key: "longTrailingEnabled", label: "Trailing", default: 1, min: 0, max: 1, step: 1 },
-          { key: "longTrailingActivationPct", label: "Trailing Activation %", default: 25, min: 1, max: 100, step: 1 },
-          { key: "longTrailingOffsetPct", label: "Trailing Offset %", default: 15, min: 1, max: 50, step: 1 },
-        ],
-      },
-      {
-        key: "short",
-        label: "Short",
-        paramDefs: [
-          { key: "shortFirstPct", label: "First Entry %", default: 100, min: 5, max: 100, step: 5 },
-          { key: "shortStopLoss", label: "Stop Loss %", default: 10, min: 1, max: 50, step: 1 },
-          { key: "shortTrailingEnabled", label: "Trailing", default: 1, min: 0, max: 1, step: 1 },
-          { key: "shortTrailingActivationPct", label: "Trailing Activation %", default: 25, min: 1, max: 100, step: 1 },
-          { key: "shortTrailingOffsetPct", label: "Trailing Offset %", default: 15, min: 1, max: 50, step: 1 },
-        ],
-      },
-      {
-        key: "direction",
-        label: "Direction",
-        paramDefs: [
-          { key: "directionFilter", label: "Direction (0=Both, 1=Long, 2=Short)", default: 0, min: 0, max: 2, step: 1 },
-          { key: "reversed", label: "Reversed", default: 0, min: 0, max: 1, step: 1 },
-          { key: "takeProfitPct", label: "Take Profit %", default: 10, min: 1, max: 50, step: 1 },
-        ],
-      },
-    ],
-  },
-  {
-    id: "mean-reversion",
-    name: "Mean Reversion",
-    description: "Flat direction: BUY when RSI < oversold threshold (default 25), SELL when RSI > overbought threshold (default 75). Exits when RSI crosses back toward the midline. Pure mean-reversion on a single pair.",
-    groups: [
-      {
-        key: "rsi",
-        label: "RSI",
-        paramDefs: [
-          { key: "rsiPeriod", label: "RSI Period", default: 14, min: 2, max: 50, step: 1 },
-          { key: "rsiOversoldThreshold", label: "Oversold (<)", default: 25, min: 5, max: 45, step: 1 },
-          { key: "rsiOverboughtThreshold", label: "Overbought (>)", default: 75, min: 55, max: 95, step: 1 },
-        ],
-      },
-      {
-        key: "exit",
-        label: "Exit",
-        paramDefs: [
-          { key: "rsiExitLong", label: "Exit Long RSI (>)", default: 50, min: 30, max: 80, step: 1 },
-          { key: "rsiExitShort", label: "Exit Short RSI (<)", default: 50, min: 20, max: 70, step: 1 },
-        ],
-      },
-      {
-        key: "direction",
-        label: "Direction",
-        paramDefs: [
-          { key: "directionFilter", label: "Direction (0=Both, 1=Long, 2=Short)", default: 0, min: 0, max: 2, step: 1 },
-          { key: "slCooldownCandles", label: "SL Cooldown Candles", default: 0, min: 0, max: 50, step: 1 },
-        ],
-      },
-      {
-        key: "long",
-        label: "Long",
-        paramDefs: [
-          { key: "longFirstPct", label: "First Entry %", default: 100, min: 5, max: 100, step: 5 },
-          { key: "longAddonEnabled", label: "Add-on", default: 0, min: 0, max: 1, step: 1 },
-          { key: "longAddonPct", label: "Add-on %", default: 60, min: 0, max: 100, step: 5 },
-          { key: "longAddonTriggerPct", label: "Add-on Trigger (%)", default: -3, min: -20, max: 0, step: 1 },
-          { key: "longAddonStopLoss", label: "Add-on Stop Loss %", default: 0, min: 0, max: 50, step: 1 },
-          { key: "longStopLoss", label: "Stop Loss %", default: 6, min: 1, max: 50, step: 1 },
-          { key: "longTrailingEnabled", label: "Trailing", default: 1, min: 0, max: 1, step: 1 },
-          { key: "longTrailingActivationPct", label: "Trailing Activation %", default: 8, min: 1, max: 100, step: 1 },
-          { key: "longTrailingOffsetPct", label: "Trailing Offset %", default: 4, min: 1, max: 50, step: 1 },
-        ],
-      },
-      {
-        key: "short",
-        label: "Short",
-        paramDefs: [
-          { key: "shortFirstPct", label: "First Entry %", default: 100, min: 5, max: 100, step: 5 },
-          { key: "shortAddonEnabled", label: "Add-on", default: 0, min: 0, max: 1, step: 1 },
-          { key: "shortAddonPct", label: "Add-on %", default: 40, min: 0, max: 100, step: 5 },
-          { key: "shortAddonTriggerPct", label: "Add-on Trigger (%)", default: 3, min: 0, max: 20, step: 1 },
-          { key: "shortAddonStopLoss", label: "Add-on Stop Loss %", default: 0, min: 0, max: 50, step: 1 },
-          { key: "shortStopLoss", label: "Stop Loss %", default: 6, min: 1, max: 50, step: 1 },
-          { key: "shortTrailingEnabled", label: "Trailing", default: 1, min: 0, max: 1, step: 1 },
-          { key: "shortTrailingActivationPct", label: "Trailing Activation %", default: 8, min: 1, max: 100, step: 1 },
-          { key: "shortTrailingOffsetPct", label: "Trailing Offset %", default: 4, min: 1, max: 50, step: 1 },
-        ],
-      },
-    ],
-  },
-  {
-    id: "trend-accumulation",
-    name: "Trend Accumulation",
-    description: "DCA + Pullback: accumulates positions during uptrend (EMA50>EMA200, ADX>25). First entry on trend flip, DCA entries on RSI oversold pullbacks. Exits via trailing stop or trend reversal.",
-    groups: [
-      {
-        key: "trend",
-        label: "Trend",
-        paramDefs: [
-          { key: "emaFast", label: "Fast EMA", default: 50, min: 10, max: 200, step: 1 },
-          { key: "emaSlow", label: "Slow EMA", default: 200, min: 50, max: 400, step: 1 },
-          { key: "emaEntry", label: "Entry EMA", default: 20, min: 5, max: 100, step: 1 },
-          { key: "adxPeriod", label: "ADX Period", default: 14, min: 7, max: 50, step: 1 },
-          { key: "adxThreshold", label: "ADX Threshold (>)", default: 25, min: 15, max: 50, step: 1 },
-        ],
-      },
-      {
-        key: "dca",
-        label: "DCA",
-        paramDefs: [
-          { key: "rsiPeriod", label: "RSI Period", default: 14, min: 7, max: 50, step: 1 },
-          { key: "rsiOversold", label: "RSI Oversold (<)", default: 38, min: 20, max: 45, step: 1 },
-          { key: "dcaMaxEntries", label: "Max DCA Entries", default: 5, min: 1, max: 10, step: 1 },
-          { key: "dcaMinDropPct", label: "Min Drop % for DCA", default: 3, min: 1, max: 10, step: 0.5 },
-        ],
-      },
-      {
-        key: "sizing",
-        label: "Sizing",
-        paramDefs: [
-          { key: "longFirstPct", label: "First Entry %", default: 30, min: 5, max: 100, step: 5 },
-          { key: "longAddonPct", label: "Addon %", default: 20, min: 5, max: 100, step: 5 },
-        ],
-      },
-      {
-        key: "exit",
-        label: "Exit",
-        paramDefs: [
-          { key: "longStopLoss", label: "Stop Loss %", default: 10, min: 1, max: 30, step: 1 },
-          { key: "longTrailingEnabled", label: "Trailing", default: 1, min: 0, max: 1, step: 1 },
-          { key: "longTrailingActivationPct", label: "Trail Activation %", default: 5, min: 1, max: 20, step: 1 },
-          { key: "longTrailingOffsetPct", label: "Trail Offset %", default: 3, min: 1, max: 10, step: 1 },
-          { key: "exitCooldownCandles", label: "Exit Cooldown", default: 3, min: 0, max: 20, step: 1 },
-        ],
-      },
-    ],
-  },
-];
-
 const DEFAULT_CONFIG: BacktestRequest = {
   exchange: "binance",
   base: "BTC",
   target: "USDT",
-  type: "futures",
-  interval: "4h",
-  startDate: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+  type: "spot",
+  interval: "1h",
+  startDate: new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0],
   endDate: new Date().toISOString().split("T")[0],
-  strategy: { strategyId: "trend-pullback", params: {} },
-  riskManagement: { stopLossPct: 6, trailingActivationPct: 8, trailingOffsetPct: 4 },
-  positionSizing: { entries: [50, 50], maxEntries: 2 },
-  initialCap: 1000,
+  strategy: { strategyId: STRATEGIES[0].id, params: initParams(STRATEGIES[0].id) },
+  riskManagement: { stopLossPct: 5, trailingActivationPct: 8, trailingOffsetPct: 4 },
+  positionSizing: { entries: [100], maxEntries: 1 },
+  initialCap: 10000,
   fees: 0.001,
 };
-
-function initParams(groups: typeof STRATEGIES[0]["groups"]): Record<string, number> {
-  const p: Record<string, number> = {};
-  for (const g of groups) for (const d of g.paramDefs) p[d.key] = d.default;
-  return p;
-}
 
 function MetricCard({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
@@ -304,7 +42,7 @@ export default function AdminBacktest() {
   const navigate = useNavigate();
   const [config, setConfig] = useState<BacktestRequest>(() => ({
     ...DEFAULT_CONFIG,
-    strategy: { ...DEFAULT_CONFIG.strategy, params: initParams(STRATEGIES[0].groups) },
+    strategy: { ...DEFAULT_CONFIG.strategy, params: initParams(STRATEGIES[0].id) },
   }));
 
   const [result, setResult] = useState<BacktestResult | null>(null);
@@ -503,7 +241,7 @@ export default function AdminBacktest() {
             </div>
             {(selectedSavedId || config.name) && (
               <button
-                onClick={() => { setSelectedSavedId(""); setConfig({ ...DEFAULT_CONFIG, strategy: { ...DEFAULT_CONFIG.strategy, params: initParams(STRATEGIES[0].groups) } }); }}
+                onClick={() => { setSelectedSavedId(""); setConfig({ ...DEFAULT_CONFIG, strategy: { ...DEFAULT_CONFIG.strategy, params: initParams(STRATEGIES[0].id) } }); }}
                 className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400"
               >
                 Reset
@@ -666,10 +404,9 @@ export default function AdminBacktest() {
             <select
               value={config.strategy.strategyId}
               onChange={(e) => {
-                const s = STRATEGIES.find((st) => st.id === e.target.value)!;
                 setConfig((prev) => ({
                   ...prev,
-                  strategy: { strategyId: e.target.value, params: initParams(s.groups) },
+                  strategy: { strategyId: e.target.value, params: initParams(e.target.value) },
                 }));
               }}
               className="mb-4 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
@@ -679,183 +416,12 @@ export default function AdminBacktest() {
               ))}
             </select>
             {currentStrategy && (
-              <p className="mb-3 text-xs text-gray-500">{currentStrategy.description}</p>
+              <StrategyParamsForm
+                strategy={currentStrategy}
+                params={config.strategy.params}
+                onChange={updateStrategyParam}
+              />
             )}
-            {currentStrategy?.groups.map((group) => (
-              <div key={group.key} className="mb-4">
-                <h4 className={`mb-2 text-xs font-semibold uppercase tracking-wider ${
-                  group.key === "long" ? "text-green-600 dark:text-green-400" :
-                  group.key === "short" ? "text-red-600 dark:text-red-400" :
-                  "text-gray-500 dark:text-gray-400"
-                }`}>
-                  {group.label}
-                </h4>
-                {(() => {
-                  const depMap: Record<string, string[]> = {
-                    emaEnabled: ["fastEMA", "slowEMA"],
-                    adxEnabled: ["adxPeriod", "adxThreshold"],
-                    rsiEnabled: ["rsiLongThreshold", "rsiShortThreshold"],
-                    biasEnabled: ["yearlyRangeLookback", "biasZoneTop", "biasZoneBottom"],
-                    longAddonEnabled: ["longAddonPct", "longAddonTriggerPct", "longAddonStopLoss"],
-                    longTrailingEnabled: ["longTrailingActivationPct", "longTrailingOffsetPct"],
-                    shortAddonEnabled: ["shortAddonPct", "shortAddonTriggerPct", "shortAddonStopLoss"],
-                    shortTrailingEnabled: ["shortTrailingActivationPct", "shortTrailingOffsetPct"],
-                  };
-                  const allDeps = Object.values(depMap).flat();
-                  const standalone = group.paramDefs.filter(d => !allDeps.includes(d.key) && !depMap[d.key]);
-                  const toggleGroups = group.paramDefs
-                    .filter(d => depMap[d.key])
-                    .map(t => ({ toggle: t, deps: depMap[t.key].map(k => group.paramDefs.find(d => d.key === k)!).filter(Boolean) }));
-                  const offMap: Record<string, boolean> = {
-                    emaEnabled: (config.strategy.params.emaEnabled ?? 0) === 0,
-                    adxEnabled: (config.strategy.params.adxEnabled ?? 0) === 0,
-                    rsiEnabled: (config.strategy.params.rsiEnabled ?? 0) === 0,
-                    biasEnabled: (config.strategy.params.biasEnabled ?? 0) === 0,
-                    longAddonEnabled: (config.strategy.params.longAddonEnabled ?? 0) === 0,
-                    shortAddonEnabled: (config.strategy.params.shortAddonEnabled ?? 0) === 0,
-                    longTrailingEnabled: (config.strategy.params.longTrailingEnabled ?? 0) === 0,
-                    shortTrailingEnabled: (config.strategy.params.shortTrailingEnabled ?? 0) === 0,
-                  };
-                  return (
-                    <>
-                      {standalone.length > 0 && (
-                        <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-6">
-                          {standalone.map(def => {
-                            const slDisabled =
-                              (def.key === "longStopLoss" && (config.strategy.params.longAddonEnabled ?? 0) !== 0) ||
-                              (def.key === "shortStopLoss" && (config.strategy.params.shortAddonEnabled ?? 0) !== 0);
-                            const disabled = slDisabled;
-                            return (
-                            <div key={def.key}>
-                              <label className={`mb-0.5 block text-xs font-medium ${disabled ? "text-gray-400 dark:text-gray-500" : "text-gray-600 dark:text-gray-400"}`}>
-                                {def.label}
-                              </label>
-                              {def.key === "directionFilter" ? (
-                                 <select
-                                   value={config.strategy.params[def.key] ?? def.default}
-                                   onChange={(e) => updateStrategyParam(def.key, Number(e.target.value))}
-                                   disabled={disabled}
-                                   className={`w-[100px] rounded-md border px-1.5 py-1 text-sm ${
-                                     disabled
-                                       ? "border-gray-200 bg-gray-100 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed"
-                                       : "border-gray-300 bg-white text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                                   }`}
-                                 >
-                                   <option value={0}>Both</option>
-                                   <option value={1}>Long</option>
-                                   <option value={2}>Short</option>
-                                 </select>
-                               ) : def.key === "reversed" ? (
-                                 <select
-                                   value={config.strategy.params[def.key] ?? def.default}
-                                   onChange={(e) => updateStrategyParam(def.key, Number(e.target.value))}
-                                   disabled={disabled}
-                                   className={`w-[100px] rounded-md border px-1.5 py-1 text-sm ${
-                                     disabled
-                                       ? "border-gray-200 bg-gray-100 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed"
-                                       : "border-gray-300 bg-white text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                                   }`}
-                                 >
-                                   <option value={0}>No</option>
-                                   <option value={1}>Yes</option>
-                                 </select>
-                              ) : (
-                                <input
-                                  type="number"
-                                  value={config.strategy.params[def.key] ?? def.default}
-                                  onChange={(e) => {
-                                    const val = Number(e.target.value);
-                                    updateStrategyParam(def.key, val);
-                                    if (def.key === "longFirstPct") {
-                                      const addonMax = Math.max(0, 100 - val);
-                                      const curAddon = config.strategy.params.longAddonPct ?? 60;
-                                      if (curAddon > addonMax) updateStrategyParam("longAddonPct", addonMax);
-                                    }
-                                    if (def.key === "shortFirstPct") {
-                                      const addonMax = Math.max(0, 100 - val);
-                                      const curAddon = config.strategy.params.shortAddonPct ?? 40;
-                                      if (curAddon > addonMax) updateStrategyParam("shortAddonPct", addonMax);
-                                    }
-                                  }}
-                                  min={def.min} max={def.max} step={def.step}
-                                  disabled={disabled}
-                                  className={`w-[100px] rounded-md border px-1.5 py-1 text-sm ${
-                                    disabled
-                                      ? "border-gray-200 bg-gray-100 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed"
-                                      : "border-gray-300 bg-white text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                                  }`}
-                                />
-                              )}
-                            </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                      {toggleGroups.map(({ toggle, deps }) => {
-                        const off = offMap[toggle.key];
-                        return (
-                          <div key={toggle.key} className="mb-2 flex flex-wrap items-center gap-3">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">{toggle.label}</span>
-                              <div className="relative inline-flex items-center">
-                                <input
-                                  type="checkbox"
-                                  checked={(config.strategy.params[toggle.key] ?? toggle.default) === 1}
-                                  onChange={(e) => updateStrategyParam(toggle.key, e.target.checked ? 1 : 0)}
-                                  className="peer sr-only"
-                                />
-                                <div className="h-5 w-9 rounded-full bg-red-400 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-green-500 peer-checked:after:translate-x-full dark:bg-red-500 dark:peer-checked:bg-green-600"></div>
-                              </div>
-                              <span className={`text-xs font-medium ${off ? "text-red-500" : "text-green-600"}`}>
-                                {off ? "OFF" : "ON"}
-                              </span>
-                            </label>
-                            {deps.map(def => {
-                              const effectiveMax =
-                                def.key === "longAddonPct"
-                                  ? Math.max(0, 100 - (config.strategy.params.longFirstPct ?? 100))
-                                  : def.key === "shortAddonPct"
-                                    ? Math.max(0, 100 - (config.strategy.params.shortFirstPct ?? 100))
-                                    : def.max;
-                              return (
-                              <div key={def.key}>
-                                <label className={`mb-0.5 block text-xs font-medium ${
-                                  off
-                                    ? "text-gray-400 dark:text-gray-500"
-                                    : def.key === "fastEMA"
-                                      ? "text-blue-600 dark:text-blue-400"
-                                      : def.key === "slowEMA"
-                                        ? "text-orange-600 dark:text-orange-500"
-                                        : "text-gray-600 dark:text-gray-400"
-                                }`}>
-                                  {def.label}
-                                </label>
-                                <input
-                                  type="number"
-                                  value={config.strategy.params[def.key] ?? def.default}
-                                  onChange={(e) => {
-                                    const val = Math.min(Number(e.target.value), effectiveMax);
-                                    updateStrategyParam(def.key, val);
-                                  }}
-                                  min={def.min} max={effectiveMax} step={def.step}
-                                  disabled={off}
-                                  className={`w-[100px] rounded-md border px-1.5 py-1 text-sm ${
-                                    off
-                                      ? "border-gray-200 bg-gray-100 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed"
-                                      : "border-gray-300 bg-white text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                                  }`}
-                                />
-                              </div>
-                            );
-                          })}
-                          </div>
-                        );
-                      })}
-                    </>
-                  );
-                })()}
-              </div>
-            ))}
           </div>
 
           {/* Run Button */}

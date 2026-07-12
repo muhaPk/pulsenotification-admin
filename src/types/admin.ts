@@ -349,3 +349,70 @@ export interface StrategyInfo {
   description: string;
   paramDefs: StrategyParamDef[];
 }
+
+// Trading types
+export interface ExchangeApiKey {
+  id: string;
+  exchange: string;
+  apiKey: string;
+  isTestnet: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BotConfig {
+  id: string;
+  userId: string;
+  exchange: string;
+  base: string;
+  target: string;
+  type: string;
+  interval: string;
+  strategyId: string;
+  params: Record<string, any>;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LiveTrade {
+  id: string;
+  userId: string;
+  botId?: string;
+  exchange: string;
+  base: string;
+  target: string;
+  type: string;
+  side: string;
+  entryPrice: number;
+  quantity: number;
+  status: string;
+  entries?: any;
+  entryCount: number;
+  exitPrice?: number;
+  exitTime?: string;
+  pnl?: number;
+  pnlPercent?: number;
+  exitReason?: string;
+  entryTime: string;
+}
+
+export interface LivePosition {
+  id: string;
+  userId: string;
+  botId?: string;
+  exchange: string;
+  base: string;
+  target: string;
+  type: string;
+  side: string;
+  entryPrice: number;
+  quantity: number;
+  stopLossPrice?: number;
+  entryCount: number;
+  highestPrice?: number;
+  lowestPrice?: number;
+  trailingActivated: boolean;
+  trailStopPrice?: number;
+  createdAt: string;
+}

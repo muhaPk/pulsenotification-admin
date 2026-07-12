@@ -27,6 +27,7 @@ import AdminPerformance from "./pages/Admin/Performance";
 import AdminBacktest from "./pages/Admin/Backtest";
 import AdminBacktestHistory from "./pages/Admin/BacktestHistory";
 import AdminBacktestView from "./pages/Admin/BacktestView";
+import AdminLiveTrading from "./pages/Admin/LiveTrading";
 
 export default function App() {
   return (
@@ -70,6 +71,7 @@ export default function App() {
             <Route path="/admin/backtest" element={<AdminBacktest />} />
             <Route path="/admin/backtest-history" element={<AdminBacktestHistory />} />
             <Route path="/admin/backtest/:id" element={<AdminBacktestView />} />
+            <Route path="/admin/live-trading" element={<AdminLiveTrading />} />
           </Route>
 
           {/* Auth Routes - Redirect to dashboard if already authenticated */}
