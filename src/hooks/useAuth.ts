@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import apiClient from './apiClient';
+import apiClient from '../api/apiClient';
 import { AUTH_CONFIG } from '../config/config';
 
 export interface LoginRequest {

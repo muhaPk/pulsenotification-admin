@@ -10,7 +10,7 @@ import { STRATEGIES, initParams } from "../../config/strategies";
 import { EquityCurveChart, DrawdownChart, TradePnlChart } from "../../components/charts/backtest/BacktestCharts";
 import CandleChart from "../../components/charts/backtest/CandleChart";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../../components/ui/table";
-import type { BacktestResult, BacktestRequest, BacktestTrade, BacktestListResponse } from "../../types/admin";
+import type { BacktestResult, BacktestRequest, BacktestListResponse } from "../../types/admin";
 
 const DEFAULT_CONFIG: BacktestRequest = {
   exchange: "binance",

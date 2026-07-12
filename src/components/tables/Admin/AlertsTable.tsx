@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -29,8 +29,8 @@ export default function AlertsTable() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
-  const { data, loading, error, loadData } = useGenericGetWeb();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const { error, loadData } = useGenericGetWeb();
   const { data: sparklinesData, loadData: loadSparklines } = useGenericGetWeb();
   const { uploadData } = useGenericSet();
 
@@ -55,7 +55,7 @@ export default function AlertsTable() {
   const loadSparklinesRef = useRef(loadSparklines);
   loadSparklinesRef.current = loadSparklines;
 
-  const fetchPageRef = useRef((pageNum: number, append: boolean) => {});
+  const fetchPageRef = useRef((_pageNum: number, _append: boolean) => {});
   fetchPageRef.current = (pageNum: number, append: boolean) => {
     setLoadingMore(true);
     loadDataRef.current({

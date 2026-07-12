@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router";
 import PageMeta from "../../components/common/PageMeta";
 import ComponentCard from "../../components/common/ComponentCard";
 import { useGenericGetWeb } from "../../hooks/useGenericGetWeb";
 import { useAxios } from "../../hooks/useAxiosWeb";
 import { API_ADMIN_BACKTEST_BY_ID, API_ADMIN_BACKTEST_CANDLES } from "../../config/endpoints";
-import { EquityCurveChart, DrawdownChart, TradePnlChart } from "../../components/charts/backtest/BacktestCharts";
+import { TradePnlChart } from "../../components/charts/backtest/BacktestCharts";
 import CandleChart from "../../components/charts/backtest/CandleChart";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../../components/ui/table";
 import type { BacktestResult, BacktestRunResponse, BacktestCandle } from "../../types/admin";
@@ -125,36 +125,6 @@ export default function AdminBacktestView() {
       loadAllCandles(interval);
     }
   };
-
-  const tradeMarkers = useMemo(() => {
-    if (!result) return { buyPoints: [], sellPoints: [] };
-    const curve = result.equityCurve;
-    const findValue = (time: number) => {
-      let lo = 0, hi = curve.length - 1;
-      while (lo < hi) {
-        const mid = (lo + hi) >> 1;
-        if (curve[mid].time < time) lo = mid + 1;
-        else hi = mid;
-      }
-      if (lo > 0 && lo < curve.length) {
-        const t0 = curve[lo - 1].time, t1 = curve[lo].time;
-        const v0 = curve[lo - 1].value, v1 = curve[lo].value;
-        return v0 + (v1 - v0) * ((time - t0) / (t1 - t0));
-      }
-      return curve[Math.min(lo, curve.length - 1)]?.value ?? 0;
-    };
-    const buyPoints: { time: number; price: number }[] = [];
-    const sellPoints: { time: number; price: number }[] = [];
-    for (const t of result.trades) {
-      const entryMs = new Date(t.entryTime).getTime();
-      buyPoints.push({ time: entryMs, price: findValue(entryMs) });
-      if (t.exitTime) {
-        const exitMs = new Date(t.exitTime).getTime();
-        sellPoints.push({ time: exitMs, price: findValue(exitMs) });
-      }
-    }
-    return { buyPoints, sellPoints };
-  }, [result]);
 
   if (loading) {
     return (

@@ -1,4 +1,3 @@
-import React from "react";
 import PageMeta from "../../components/common/PageMeta";
 import PairsTable from "../../components/tables/Admin/PairsTable";
 import ComponentCard from "../../components/common/ComponentCard";
@@ -20,7 +19,7 @@ export default function AdminPairs() {
           </p>
         </div>
 
-        <ComponentCard>
+        <ComponentCard title="Pairs">
           <PairsTable />
         </ComponentCard>
       </div>

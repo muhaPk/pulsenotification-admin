@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { Dropdown } from "../ui/dropdown/Dropdown";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import { useAuthStore } from "../../store/auth.store.simple";
 
 export default function UserDropdown() {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -38,7 +38,7 @@ export default function PairsTable() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const handleSort = (column: SortColumn) => {
     if (sortColumn === column) {
@@ -53,7 +53,7 @@ export default function PairsTable() {
     if (sortColumn !== column) return <span className="ml-1 text-gray-300">↕</span>;
     return <span className="ml-1 text-blue-500">{sortDirection === 'asc' ? '↑' : '↓'}</span>;
   };
-  const { data, loading, error, loadData } = useGenericGetWeb();
+  const { error, loadData } = useGenericGetWeb();
   const { data: volData, loadData: loadVol } = useGenericGetWeb();
   const { data: alertsData, loadData: loadAlerts } = useGenericGetWeb();
   const { data: sparklinesData, loadData: loadSparklines } = useGenericGetWeb();
@@ -69,7 +69,7 @@ export default function PairsTable() {
   const loadSparklinesRef = useRef(loadSparklines);
   loadSparklinesRef.current = loadSparklines;
 
-  const fetchPageRef = useRef((pageNum: number, append: boolean) => {});
+  const fetchPageRef = useRef((_pageNum: number, _append: boolean) => {});
   fetchPageRef.current = (pageNum: number, append: boolean) => {
     setLoadingMore(true);
     loadDataRef.current({

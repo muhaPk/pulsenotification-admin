@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { useAxios } from "./useAxiosWeb";
-import { LoadDataParams, TGenericGet } from "@/shared/types/request";
+import { LoadDataParams, TGenericGet } from "../shared/types/request";
 
 export const useGenericGetWeb = (): TGenericGet => {
   const [loading, setLoading] = useState(false);

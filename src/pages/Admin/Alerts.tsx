@@ -1,4 +1,3 @@
-import React from "react";
 import PageMeta from "../../components/common/PageMeta";
 import AlertsTable from "../../components/tables/Admin/AlertsTable";
 import ComponentCard from "../../components/common/ComponentCard";
@@ -20,7 +19,7 @@ export default function AdminAlerts() {
           </p>
         </div>
 
-        <ComponentCard>
+        <ComponentCard title="Alerts">
           <AlertsTable />
         </ComponentCard>
       </div>

@@ -1,4 +1,3 @@
-import React from "react";
 import PageMeta from "../../components/common/PageMeta";
 import UsersTable from "../../components/tables/Admin/UsersTable";
 import ComponentCard from "../../components/common/ComponentCard";
@@ -20,7 +19,7 @@ export default function AdminUsers() {
           </p>
         </div>
 
-        <ComponentCard>
+        <ComponentCard title="Users">
           <UsersTable />
         </ComponentCard>
       </div>

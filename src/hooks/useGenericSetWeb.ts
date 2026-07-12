@@ -15,6 +15,7 @@ export interface UploadDataParams {
   method?: string;
   type?: "form-data";
   dataCallback?: (data: any) => void;
+  errorHandler?: (error: any) => void;
   headers?: { [key: string]: string };
   loader?: (loading: boolean) => void;
 }
